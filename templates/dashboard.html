@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard Leads</title>
+</head>
+<body>
+
+<h1>📊 Dashboard Leads</h1>
+
+<p>Total Leads: {{ leads | length }}</p>
+
+<table border="1" cellpadding="10">
+    <tr>
+        <th>Nama Ortu</th>
+        <th>Nama Anak</th>
+        <th>Umur</th>
+        <th>WhatsApp</th>
+        <th>Status</th>
+        <th>Aksi</th>
+    </tr>
+
+    {% for lead in leads %}
+    <tr>
+        <td>{{ lead.nama_orangtua }}</td>
+        <td>{{ lead.nama_anak }}</td>
+        <td>{{ lead.umur_anak }}</td>
+        <td>{{ lead.whatsapp }}</td>
+        <td>{{ lead.status }}</td>
+        <td>
+            <a href="/dashboard">ALL</a> |
+            <a href="/dashboard?status=COLD">COLD</a> |
+            <a href="/dashboard?status=WARM">WARM</a> |
+            <a href="/dashboard?status=HOT">HOT</a>
+            <a href="/update-status/{{ lead.id }}/COLD">COLD</a> |
+            <a href="/update-status/{{ lead.id }}/WARM">WARM</a> |
+            <a href="/update-status/{{ lead.id }}/HOT">HOT</a>
+        <td>
+            {% if lead.status == "HOT" %}
+                <span style="color:red;"><b>{{ lead.status }}</b></span>
+            {% elif lead.status == "WARM" %}
+                <span style="color:orange;"><b>{{ lead.status }}</b></span>
+            {% else %}
+                <span style="color:gray;">{{ lead.status }}</span>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
+</body>
+</html>
