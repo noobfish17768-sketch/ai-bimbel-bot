@@ -98,14 +98,11 @@ def dashboard(request: Request, status: str = None, q: str = None):
 # =========================
 # MAIN RUNNER
 # =========================
-if __name__ == "__main__":
-    print("\n🤖 START TELEGRAM BOT THREAD...")
+@app.on_event("startup")
+def start_bot():
+    print("🤖 START TELEGRAM BOT (RAILWAY MODE)")
     threading.Thread(target=run_bot).start()
     threading.Thread(target=run_followup).start()
-
-    print("🌐 START FASTAPI...")
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
 @app.get("/update-status/{lead_id}/{status}")
