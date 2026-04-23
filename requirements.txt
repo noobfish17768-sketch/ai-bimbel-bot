@@ -5,3 +5,4 @@ openai
 requests
 python-dotenv
 jinja2
+python-telegram-bot==20.7

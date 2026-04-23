@@ -222,7 +222,6 @@ def run_ai(user_id: str, message: str):
 def save_lead(data, user_id):
     lead = data.get("lead", {})
     status = data.get("status", "COLD")
-    lead.last_chat = datetime.datetime.utcnow()
 
     if not lead:
         return
@@ -235,6 +234,7 @@ def save_lead(data, user_id):
 
     if existing:
         existing.status = status
+        existing.last_chat = datetime.utcnow()
 
         if lead.get("nama_orangtua"):
             existing.nama_orangtua = lead["nama_orangtua"]
@@ -251,7 +251,8 @@ def save_lead(data, user_id):
             nama_orangtua=lead.get("nama_orangtua"),
             nama_anak=lead.get("nama_anak"),
             umur_anak=lead.get("umur_anak"),
-            status=status
+            status=status,
+            last_chat=datetime.utcnow()
         ))
 
     db.commit()
