@@ -1,54 +1,66 @@
 print("🚀 START APP")
 
 from fastapi import FastAPI, Request
-print("✅ Import FastAPI OK")
-
 from fastapi.templating import Jinja2Templates
-print("✅ Import Templates OK")
+from fastapi.responses import RedirectResponse
 
 from database import engine, Base, SessionLocal
-print("✅ Database OK")
-
 from models import LeadDB
-print("✅ Models OK")
-
 from ai_service import run_ai
-print("✅ AI Service OK")
 
-import threading
-from telegram_bot import run_bot
-
-from fastapi.responses import RedirectResponse
-from followup import run_followup
 from sqlalchemy import or_
-print("✅ Telegram Bot Import OK")
+
+from telegram import Bot
+import os
+
+print("✅ Import OK")
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
+bot = Bot(token=os.getenv("TELEGRAM_TOKEN"))
+
+# =========================
+# INIT DATABASE
+# =========================
 print("📦 Create Table...")
 Base.metadata.create_all(bind=engine)
 print("✅ Table Ready")
 
 
 # =========================
-# API CHAT (TEST MANUAL)
+# TELEGRAM WEBHOOK
+# =========================
+@app.post("/webhook/telegram")
+async def telegram_webhook(request: Request):
+    data = await request.json()
+    print("🔥 WEBHOOK MASUK:", data)
+
+    if "message" not in data:
+        return {"ok": True}
+
+    message = data["message"].get("text", "")
+    user_id = data["message"]["chat"]["id"]
+
+    result = run_ai(str(user_id), message)
+
+    await bot.send_message(
+        chat_id=user_id,
+        text=result["reply"]
+    )
+
+    return {"ok": True}
+
+
+# =========================
+# API CHAT (TEST)
 # =========================
 @app.post("/chat")
 def chat(data: dict):
-    print("\n🔥 /chat KE PANGGIL")
-    print("DATA MASUK:", data)
-
     user_id = data.get("user_id", "user")
     message = data.get("message", "")
 
-    print("USER:", user_id)
-    print("MESSAGE:", message)
-
     result = run_ai(user_id, message)
-
-    print("AI RESULT:", result)
-
     return result
 
 
@@ -57,10 +69,10 @@ def chat(data: dict):
 # =========================
 @app.get("/dashboard")
 def dashboard(request: Request, status: str = None, q: str = None):
-    print("\n📊 DASHBOARD DI BUKA")
 
     db = SessionLocal()
     query = db.query(LeadDB)
+
     if status:
         query = query.filter(LeadDB.status == status)
 
@@ -75,10 +87,6 @@ def dashboard(request: Request, status: str = None, q: str = None):
     leads = query.all()
     db.close()
 
-    print("JUMLAH LEADS:", len(leads))
-    print("TYPE REQ:", type(request))
-
-    # 🔥 convert ke dict (biar Jinja ga error)
     leads_data = []
     for l in leads:
         leads_data.append({
@@ -95,16 +103,10 @@ def dashboard(request: Request, status: str = None, q: str = None):
         context={"leads": leads_data}
     )
 
-# =========================
-# MAIN RUNNER
-# =========================
-@app.on_event("startup")
-def start_bot():
-    print("🤖 START TELEGRAM BOT (RAILWAY MODE)")
-    threading.Thread(target=run_bot).start()
-    threading.Thread(target=run_followup).start()
 
-
+# =========================
+# UPDATE STATUS
+# =========================
 @app.get("/update-status/{lead_id}/{status}")
 def update_status(lead_id: int, status: str):
     db = SessionLocal()
