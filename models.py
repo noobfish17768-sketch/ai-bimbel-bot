@@ -1,9 +1,6 @@
-from sqlalchemy import Column, Integer, String, DateTime
-from datetime import datetime
-from database import Base
-
 class LeadDB(Base):
     __tablename__ = "leads"
+    __table_args__ = {"extend_existing": True}  # 🔥 FIX WAJIB
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -17,12 +14,12 @@ class LeadDB(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     last_chat = Column(DateTime, default=datetime.utcnow)
 
-    # 🔥 WAJIB untuk followup system
+    chat_history = Column(String, nullable=True)
+
     last_followup = Column(DateTime, nullable=True)
     lead_score = Column(Integer, default=0)
     next_followup = Column(DateTime, nullable=True)
     followup_count = Column(Integer, default=0)
 
-    # 🔥 AI LEARNING
-    converted = Column(Integer, default=0)  # 0 = belum, 1 = sudah daftar
+    converted = Column(Integer, default=0)
     response_count = Column(Integer, default=0)
