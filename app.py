@@ -12,12 +12,27 @@ from sqlalchemy import or_
 
 from telegram import Bot
 import os
+import asyncio
+import threading
+
+from followup import run_followup
 
 print("✅ Import OK")
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
-bot = Bot(token=os.getenv("TELEGRAM_TOKEN"))
+
+# =========================
+# INIT TELEGRAM BOT
+# =========================
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+
+if not TELEGRAM_TOKEN:
+    print("❌ TELEGRAM TOKEN TIDAK ADA!")
+    bot = None
+else:
+    bot = Bot(token=TELEGRAM_TOKEN)
+    print("✅ Bot Telegram Ready")
 
 # =========================
 # INIT DATABASE
@@ -28,13 +43,16 @@ print("✅ Table Ready")
 
 
 # =========================
-# TELEGRAM WEBHOOK
+# ROOT (HEALTH CHECK)
 # =========================
 @app.get("/")
 def root():
-    return {"status": "hidup"}
-print("✅ Hidup")
+    return {"status": "hidup 🚀"}
 
+
+# =========================
+# TELEGRAM WEBHOOK
+# =========================
 @app.post("/webhook/telegram")
 async def telegram_webhook(request: Request):
     try:
@@ -42,35 +60,41 @@ async def telegram_webhook(request: Request):
         print("🔥 WEBHOOK MASUK:", data)
 
         if "message" not in data:
-            print("❌ BUKAN MESSAGE")
+            print("⚠️ Bukan message update")
             return {"ok": True}
 
         message = data["message"].get("text", "")
         user_id = data["message"]["chat"]["id"]
 
-        print("👤 USER:", user_id)
-        print("💬 MSG:", message)
+        print(f"👤 USER: {user_id}")
+        print(f"💬 MSG: {message}")
 
-        import asyncio
+        # 🔥 run AI di thread (biar ga blocking)
         result = await asyncio.to_thread(run_ai, str(user_id), message)
 
         print("🤖 AI RESULT:", result)
 
-        await bot.send_message(
-            chat_id=user_id,
-            text=result["reply"]
-        )
-
-        print("✅ PESAN TERKIRIM")
+        # =========================
+        # SEND MESSAGE
+        # =========================
+        if bot:
+            await bot.send_message(
+                chat_id=user_id,
+                text=result["reply"]
+            )
+            print("✅ Pesan terkirim")
+        else:
+            print("❌ Bot tidak aktif")
 
         return {"ok": True}
 
     except Exception as e:
-        print("❌ ERROR BESAR:", e)
+        print("❌ ERROR WEBHOOK:", e)
         return {"ok": True}
 
+
 # =========================
-# API CHAT (TEST)
+# API CHAT (TEST MANUAL)
 # =========================
 @app.post("/chat")
 def chat(data: dict):
@@ -79,7 +103,7 @@ def chat(data: dict):
 
     result = run_ai(user_id, message)
     return result
-print("✅ API Jalan")
+
 
 # =========================
 # DASHBOARD
@@ -118,7 +142,7 @@ def dashboard(request: Request, status: str = None, q: str = None):
         name="dashboard.html",
         context={"leads": leads_data}
     )
-print("✅ Dashboard Siap")
+
 
 # =========================
 # UPDATE STATUS
@@ -136,5 +160,20 @@ def update_status(lead_id: int, status: str):
     db.close()
 
     return RedirectResponse(url="/dashboard", status_code=302)
-print("✅ Update Status Ada")
-print("✅ App Siap Jalan")
+
+
+# =========================
+# START BACKGROUND JOB
+# =========================
+@app.on_event("startup")
+def start_background_jobs():
+    print("🚀 START BACKGROUND JOBS")
+
+    try:
+        thread = threading.Thread(target=run_followup, daemon=True)
+        thread.start()
+        print("✅ Follow-up system jalan")
+    except Exception as e:
+        print("❌ Gagal start followup:", e)
+
+print("✅ App siap jalan")

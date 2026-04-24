@@ -24,62 +24,37 @@ Gaya komunikasi:
 ATURAN WAJIB:
 - Gunakan bahasa Indonesia sesuai EYD
 - Gunakan sentence case
-- Gunakan line break (\n) agar mudah dibaca di WhatsApp
+- Gunakan line break (\\n) agar mudah dibaca di WhatsApp
 - Maksimal 60 kata
-- Maksimal 3–4 baris utama (hindari paragraf panjang)
+- Maksimal 3–4 baris utama
 - Hindari kalimat bertele-tele
 
 FORMAT BALASAN:
-1. Sapaan singkat (contoh: Halo kak 😊) di chat pertama
-2. Jawaban inti (langsung ke poin)
-3. (Opsional) bullet point maksimal 2 item
-4. Tutup dengan 1 pertanyaan untuk lanjutkan percakapan
+1. Sapaan singkat (hanya jika perlu)
+2. Jawaban inti
+3. (Opsional) bullet point max 2
+4. Tutup dengan 1 pertanyaan (tidak wajib selalu)
 
-CONTOH FORMAT:
-Halo kak 😊
+TUJUAN:
+- Mengarahkan ke pendaftaran
+- Mengumpulkan data user
 
-Kami ada program untuk anak usia 5–7 tahun.
+ATURAN SAPAAN:
+- Jika KONDISI = CHAT_PERTAMA → boleh pakai "Halo kak 😊"
+- Jika LANJUTAN → jangan pakai sapaan pembuka
+- Variasikan: "Baik kak", "Siap kak", atau langsung jawab
 
-📚 Fokus:
-• Membaca  
-• Menulis  
+PERSONALISASI:
+- Gunakan NAMA_USER jika ada (sesekali saja)
 
-Boleh tahu usia anaknya berapa ya?
+STRATEGI STATUS:
+- COLD → edukasi
+- WARM → arahkan trial
+- HOT → closing langsung
 
-TUJUAN UTAMA:
-- Mengarahkan user ke pendaftaran
-- Mengumpulkan data: nama orang tua, nama anak, umur anak, nomor WhatsApp
-- Jika user tertarik → arahkan ke trial / pendaftaran
-
-KONDISI KHUSUS:
-- Jika user menyebut umur anak → isi "umur_anak"
-- Jika user menyebut nama → isi field yang sesuai
-- Jika user terlihat tertarik → ubah status menjadi "WARM" atau "HOT"
-- Jika user sangat siap daftar → arahkan langsung ke pendaftaran
-
-STATUS:
-- "COLD" = baru tanya
-- "WARM" = mulai tertarik
-- "HOT" = siap daftar
-
-KALIMAT CLOSING YANG BOLEH DIGUNAKAN:
-- "Kalau cocok, kita bisa lanjut trial ya kak 😊"
-- "Boleh aku bantu daftarkan?"
-- "Mau aku jelaskan jadwal & biayanya?"
-
-LARANGAN:
-- Jangan membuat jawaban panjang
-- Jangan mengulang informasi
-- Jangan keluar dari format WhatsApp
-- Jangan menambahkan teks di luar JSON
-- Jangan terlalu sering bertanya atau memaksa bertanya
-- Jangan terlalu terpaku dengan Tamplate, sesuaikan dengan isi pesan yang dibutuhkan 
-- Jangan gunakan "Halo" pada setiap chat
-
-OUTPUT WAJIB (HARUS VALID JSON, TANPA TAMBAHAN TEKS APAPUN):
-
+OUTPUT WAJIB JSON:
 {
-  "reply": "<jawaban sesuai format WhatsApp>",
+  "reply": "...",
   "lead": {
     "nama_orangtua": null,
     "nama_anak": null,
@@ -89,6 +64,18 @@ OUTPUT WAJIB (HARUS VALID JSON, TANPA TAMBAHAN TEKS APAPUN):
   "status": "COLD"
 }
 """
+
+# =========================
+# GET USER
+# =========================
+def get_lead(user_id):
+    db = SessionLocal()
+    user = db.query(LeadDB).filter(
+        LeadDB.whatsapp == user_id
+    ).first()
+    db.close()
+    return user
+
 
 # =========================
 # SAFE JSON PARSER
@@ -111,6 +98,7 @@ def safe_parse(ai_text):
         "lead": {},
         "status": "COLD"
     }
+
 
 # =========================
 # FORMAT WHATSAPP
@@ -136,19 +124,38 @@ def format_reply(text: str):
 
     return "\n".join(cleaned)
 
+
 # =========================
 # AUTO CLOSING
 # =========================
-def auto_closing(data):
-    text = data.get("reply", "").lower()
+def auto_closing(data, message, status):
+    text = data.get("reply", "")
+    msg = message.lower()
 
-    triggers = ["tertarik", "daftar", "join", "gabung"]
+    # =========================
+    # HOT → HARD CLOSING
+    # =========================
+    if status == "HOT":
+        if "daftar" not in text.lower():
+            text += "\n\nBoleh aku bantu daftarkan sekarang kak? 😊"
 
-    if any(t in text for t in triggers):
-        if "daftarkan" not in text:
-            data["reply"] += "\n\nKalau cocok, aku bisa bantu daftarkan ya kak 😊"
+    # =========================
+    # WARM → SOFT CLOSING
+    # =========================
+    elif status == "WARM":
+        if any(x in msg for x in ["harga", "jadwal", "berapa"]):
+            text += "\n\nKalau cocok, kita bisa coba trial dulu ya kak 😊"
 
+    # =========================
+    # COLD → EDUKASI RINGAN
+    # =========================
+    else:
+        if "program" in msg:
+            text += "\n\nBiasanya anak jadi lebih cepat lancar baca 😊"
+
+    data["reply"] = text
     return data
+
 
 # =========================
 # UPDATE LAST CHAT
@@ -172,23 +179,52 @@ def update_last_chat(user_id):
 # =========================
 def run_ai(user_id: str, message: str):
 
+    # =========================
+    # INIT MEMORY
+    # =========================
     if user_id not in chat_memory:
         chat_memory[user_id] = []
 
     history = chat_memory[user_id]
 
+    # ✅ FIX sapaan
+    is_first_chat = len(history) == 0
+
+    # =========================
+    # GET USER DATA
+    # =========================
+    user = get_lead(user_id)
+
+    nama = user.nama_orangtua if user and user.nama_orangtua else ""
+    status_user = user.status if user and user.status else "COLD"
+
+    # =========================
+    # SAVE USER MESSAGE
+    # =========================
     history.append({
         "role": "user",
         "content": message
     })
 
-    # batasi memory
     chat_memory[user_id] = history[-MAX_HISTORY:]
 
+    # =========================
+    # SYSTEM CONTEXT
+    # =========================
+    system_context = SYSTEM_PROMPT + f"""
+
+KONDISI: {'CHAT_PERTAMA' if is_first_chat else 'LANJUTAN'}
+NAMA_USER: {nama}
+STATUS_LEAD: {status_user}
+"""
+
+    # =========================
+    # CALL AI
+    # =========================
     response = client.responses.create(
         model="gpt-4.1-mini",
         input=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_context},
             *chat_memory[user_id]
         ],
         max_output_tokens=300
@@ -201,20 +237,39 @@ def run_ai(user_id: str, message: str):
 
     if not data.get("lead"):
         data["lead"] = {}
-    
 
-    data = auto_closing(data)
+    # =========================
+    # AUTO STATUS UPDATE
+    # =========================
+    msg = message.lower()
+
+    if any(x in msg for x in ["daftar", "mau daftar", "join"]):
+        data["status"] = "HOT"
+    elif any(x in msg for x in ["tertarik", "info", "harga"]):
+        data["status"] = "WARM"
+
+    # =========================
+    # FORMAT RESPONSE
+    # =========================
+    data = auto_closing(data, message, data.get("status", "COLD"))
     data["reply"] = format_reply(data["reply"])
 
+    # =========================
+    # SAVE TO DB
+    # =========================
     save_lead(data, user_id)
     update_last_chat(user_id)
 
+    # =========================
+    # SAVE MEMORY
+    # =========================
     history.append({
         "role": "assistant",
         "content": data["reply"]
     })
 
     return data
+
 
 # =========================
 # SAVE LEAD
@@ -257,4 +312,3 @@ def save_lead(data, user_id):
 
     db.commit()
     db.close()
-
