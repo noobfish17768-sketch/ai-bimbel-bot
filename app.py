@@ -57,34 +57,25 @@ def root():
 async def telegram_webhook(request: Request):
     try:
         data = await request.json()
-        print("🔥 WEBHOOK MASUK:", data)
+        print("🔥 WEBHOOK:", data)
 
         if "message" not in data:
-            print("⚠️ Bukan message update")
             return {"ok": True}
 
         message = data["message"].get("text", "")
         user_id = data["message"]["chat"]["id"]
 
-        print(f"👤 USER: {user_id}")
-        print(f"💬 MSG: {message}")
+        print(f"👤 {user_id} | 💬 {message}")
 
-        # 🔥 run AI di thread (biar ga blocking)
+        # run AI non-blocking
         result = await asyncio.to_thread(run_ai, str(user_id), message)
 
-        print("🤖 AI RESULT:", result)
-
-        # =========================
-        # SEND MESSAGE
-        # =========================
         if bot:
             await bot.send_message(
                 chat_id=user_id,
                 text=result["reply"]
             )
-            print("✅ Pesan terkirim")
-        else:
-            print("❌ Bot tidak aktif")
+            print("✅ Reply terkirim")
 
         return {"ok": True}
 
@@ -94,15 +85,14 @@ async def telegram_webhook(request: Request):
 
 
 # =========================
-# API CHAT (TEST MANUAL)
+# API CHAT (TEST)
 # =========================
 @app.post("/chat")
 def chat(data: dict):
     user_id = data.get("user_id", "user")
     message = data.get("message", "")
 
-    result = run_ai(user_id, message)
-    return result
+    return run_ai(user_id, message)
 
 
 # =========================
@@ -127,15 +117,13 @@ def dashboard(request: Request, status: str = None, q: str = None):
     leads = query.all()
     db.close()
 
-    leads_data = []
-    for l in leads:
-        leads_data.append({
-            "nama_orangtua": l.nama_orangtua,
-            "nama_anak": l.nama_anak,
-            "umur_anak": l.umur_anak,
-            "whatsapp": l.whatsapp,
-            "status": l.status
-        })
+    leads_data = [{
+        "nama_orangtua": l.nama_orangtua,
+        "nama_anak": l.nama_anak,
+        "umur_anak": l.umur_anak,
+        "whatsapp": l.whatsapp,
+        "status": l.status
+    } for l in leads]
 
     return templates.TemplateResponse(
         request=request,
@@ -163,17 +151,23 @@ def update_status(lead_id: int, status: str):
 
 
 # =========================
-# START BACKGROUND JOB
+# BACKGROUND JOB
 # =========================
 @app.on_event("startup")
 def start_background_jobs():
     print("🚀 START BACKGROUND JOBS")
 
     try:
-        thread = threading.Thread(target=run_followup, daemon=True)
+        thread = threading.Thread(
+            target=run_followup,
+            daemon=True
+        )
         thread.start()
-        print("✅ Follow-up system jalan")
+
+        print("✅ Follow-up aktif")
+
     except Exception as e:
         print("❌ Gagal start followup:", e)
 
-print("✅ App siap jalan")
+
+print("✅ APP READY")

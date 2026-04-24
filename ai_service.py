@@ -13,46 +13,32 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 chat_memory = {}
 MAX_HISTORY = 6
 
+# =========================
+# SYSTEM PROMPT
+# =========================
 SYSTEM_PROMPT = """
 Kamu adalah CS profesional untuk bimbel anak baca tulis.
 
 Gaya komunikasi:
 - Ramah, sopan, natural seperti admin WhatsApp
-- Tidak kaku dan tidak seperti robot
-- Gunakan emoji secukupnya (maksimal 2, contoh: 😊📚)
+- Gunakan emoji secukupnya (maks 2)
 
-ATURAN WAJIB:
-- Gunakan bahasa Indonesia sesuai EYD
-- Gunakan sentence case
-- Gunakan line break (\\n) agar mudah dibaca di WhatsApp
-- Maksimal 60 kata
-- Maksimal 3–4 baris utama
-- Hindari kalimat bertele-tele
+ATURAN:
+- Maks 60 kata
+- Maks 3–4 baris
+- Gunakan line break
+- Tidak bertele-tele
 
-FORMAT BALASAN:
-1. Sapaan singkat (hanya jika perlu)
-2. Jawaban inti
-3. (Opsional) bullet point max 2
-4. Tutup dengan 1 pertanyaan (tidak wajib selalu)
-
-TUJUAN:
-- Mengarahkan ke pendaftaran
-- Mengumpulkan data user
-
-ATURAN SAPAAN:
-- Jika KONDISI = CHAT_PERTAMA → boleh pakai "Halo kak 😊"
-- Jika LANJUTAN → jangan pakai sapaan pembuka
-- Variasikan: "Baik kak", "Siap kak", atau langsung jawab
-
-PERSONALISASI:
-- Gunakan NAMA_USER jika ada (sesekali saja)
-
-STRATEGI STATUS:
+FUNNEL:
 - COLD → edukasi
 - WARM → arahkan trial
-- HOT → closing langsung
+- HOT → closing
 
-OUTPUT WAJIB JSON:
+SAPAAN:
+- CHAT_PERTAMA → boleh sapaan
+- LANJUTAN → jangan sapaan terus
+
+OUTPUT JSON:
 {
   "reply": "...",
   "lead": {
@@ -78,7 +64,7 @@ def get_lead(user_id):
 
 
 # =========================
-# SAFE JSON PARSER
+# SAFE JSON
 # =========================
 def safe_parse(ai_text):
     try:
@@ -101,9 +87,9 @@ def safe_parse(ai_text):
 
 
 # =========================
-# FORMAT WHATSAPP
+# FORMAT
 # =========================
-def format_reply(text: str):
+def format_reply(text):
     if not text:
         return text
 
@@ -126,35 +112,109 @@ def format_reply(text: str):
 
 
 # =========================
+# STATUS DETECTION
+# =========================
+def detect_status(message, current_status):
+    msg = message.lower()
+
+    if any(x in msg for x in ["daftar", "join", "ikut"]):
+        return "HOT"
+
+    if any(x in msg for x in ["harga", "jadwal", "info", "berapa"]):
+        return "WARM"
+
+    return current_status
+
+
+# =========================
 # AUTO CLOSING
 # =========================
 def auto_closing(data, message, status):
-    text = data.get("reply", "")
+    text = data.get("reply", "").lower()
+
+    if status == "HOT":
+        if "daftar" not in text:
+            data["reply"] += "\n\nAku bantu daftarkan sekarang ya kak 😊"
+
+    elif status == "WARM":
+        if "trial" not in text:
+            data["reply"] += "\n\nKita bisa coba trial dulu ya kak 😊"
+
+    return data
+
+
+# =========================
+# OBJECTION HANDLING
+# =========================
+def handle_objection(message, reply):
+    msg = message.lower()
+
+    if "mahal" in msg:
+        return (
+            "Hehe paham kak 😊\n\n"
+            "Biasanya orang tua ambil karena:\n"
+            "• Anak cepat lancar baca\n"
+            "• Lebih percaya diri\n\n"
+            "Bisa coba trial dulu ya kak"
+        )
+
+    if any(x in msg for x in ["nanti", "belum", "pikir"]):
+        return (
+            "Siap kak 😊\n\n"
+            "Biasanya mulai dari trial dulu biar lihat hasilnya\n\n"
+            "Mau aku bantu cek jadwalnya?"
+        )
+
+    if any(x in msg for x in ["takut", "ga cocok"]):
+        return (
+            "Wajar kak 😊\n\n"
+            "Makanya ada trial supaya anak bisa adaptasi\n\n"
+            "Biasanya cepat nyaman kok"
+        )
+
+    return reply
+
+
+# =========================
+# ADVANCED CLOSING
+# =========================
+def advanced_closing(message, status, reply):
     msg = message.lower()
 
     # =========================
-    # HOT → HARD CLOSING
+    # HOT → HARD CLOSE + URGENCY
     # =========================
     if status == "HOT":
-        if "daftar" not in text.lower():
-            text += "\n\nBoleh aku bantu daftarkan sekarang kak? 😊"
+        return (
+            reply +
+            "\n\nSlot minggu ini hampir penuh kak 😊\n"
+            "Mau aku bantu amankan sekarang?"
+        )
 
     # =========================
-    # WARM → SOFT CLOSING
+    # WARM → CHOICE CLOSING
     # =========================
-    elif status == "WARM":
-        if any(x in msg for x in ["harga", "jadwal", "berapa"]):
-            text += "\n\nKalau cocok, kita bisa coba trial dulu ya kak 😊"
+    if status == "WARM":
+        if any(x in msg for x in ["harga", "jadwal", "gimana", "info"]):
+            return (
+                reply +
+                "\n\nKalau cocok, kakak lebih prefer:\n"
+                "• Trial dulu\n"
+                "• Atau langsung daftar?\n"
+            )
 
     # =========================
-    # COLD → EDUKASI RINGAN
+    # COLD → MICRO COMMITMENT
     # =========================
-    else:
-        if "program" in msg:
-            text += "\n\nBiasanya anak jadi lebih cepat lancar baca 😊"
+    if status == "COLD":
+        if "anak" in msg or "program" in msg:
+            return (
+                reply +
+                "\n\nBiasanya kita mulai dari trial dulu biar anak nyaman 😊\n"
+                "Mau aku bantu jadwalkan?"
+            )
 
-    data["reply"] = text
-    return data
+    return reply
 
 
 # =========================
@@ -175,32 +235,21 @@ def update_last_chat(user_id):
 
 
 # =========================
-# MAIN AI FUNCTION
+# MAIN AI
 # =========================
 def run_ai(user_id: str, message: str):
 
-    # =========================
-    # INIT MEMORY
-    # =========================
     if user_id not in chat_memory:
         chat_memory[user_id] = []
 
     history = chat_memory[user_id]
-
-    # ✅ FIX sapaan
     is_first_chat = len(history) == 0
 
-    # =========================
-    # GET USER DATA
-    # =========================
     user = get_lead(user_id)
 
-    nama = user.nama_orangtua if user and user.nama_orangtua else ""
-    status_user = user.status if user and user.status else "COLD"
+    nama = user.nama_orangtua if user else ""
+    current_status = user.status if user else "COLD"
 
-    # =========================
-    # SAVE USER MESSAGE
-    # =========================
     history.append({
         "role": "user",
         "content": message
@@ -208,30 +257,32 @@ def run_ai(user_id: str, message: str):
 
     chat_memory[user_id] = history[-MAX_HISTORY:]
 
-    # =========================
-    # SYSTEM CONTEXT
-    # =========================
     system_context = SYSTEM_PROMPT + f"""
 
 KONDISI: {'CHAT_PERTAMA' if is_first_chat else 'LANJUTAN'}
 NAMA_USER: {nama}
-STATUS_LEAD: {status_user}
+STATUS_LEAD: {current_status}
 """
 
-    # =========================
-    # CALL AI
-    # =========================
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=[
-            {"role": "system", "content": system_context},
-            *chat_memory[user_id]
-        ],
-        max_output_tokens=300
-    )
+    try:
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=[
+                {"role": "system", "content": system_context},
+                *chat_memory[user_id]
+            ],
+            max_output_tokens=300
+        )
 
-    ai_text = response.output_text
-    print("AI RAW:", ai_text)
+        ai_text = response.output_text
+
+    except Exception as e:
+        print("❌ OPENAI ERROR:", e)
+        return {
+            "reply": "Maaf kak, lagi ada gangguan sebentar 🙏",
+            "lead": {},
+            "status": current_status
+        }
 
     data = safe_parse(ai_text)
 
@@ -239,30 +290,32 @@ STATUS_LEAD: {status_user}
         data["lead"] = {}
 
     # =========================
-    # AUTO STATUS UPDATE
+    # STATUS UPDATE
     # =========================
-    msg = message.lower()
+    detected_status = detect_status(message, current_status)
 
-    if any(x in msg for x in ["daftar", "mau daftar", "join"]):
-        data["status"] = "HOT"
-    elif any(x in msg for x in ["tertarik", "info", "harga"]):
-        data["status"] = "WARM"
+    # jangan downgrade status
+    status_priority = {"COLD": 1, "WARM": 2, "HOT": 3}
+
+    if status_priority[detected_status] > status_priority[current_status]:
+        data["status"] = detected_status
+    else:
+        data["status"] = current_status
 
     # =========================
-    # FORMAT RESPONSE
+    # RESPONSE PROCESS
     # =========================
-    data = auto_closing(data, message, data.get("status", "COLD"))
+    data = auto_closing(data, message, data["status"])
     data["reply"] = format_reply(data["reply"])
+    data["reply"] = handle_objection(message, data["reply"])
+    data["reply"] = advanced_closing(message, data.get("status", "COLD"), data["reply"])
 
     # =========================
-    # SAVE TO DB
+    # SAVE
     # =========================
     save_lead(data, user_id)
     update_last_chat(user_id)
 
-    # =========================
-    # SAVE MEMORY
-    # =========================
     history.append({
         "role": "assistant",
         "content": data["reply"]
@@ -277,9 +330,6 @@ STATUS_LEAD: {status_user}
 def save_lead(data, user_id):
     lead = data.get("lead", {})
     status = data.get("status", "COLD")
-
-    if not lead:
-        return
 
     db = SessionLocal()
 

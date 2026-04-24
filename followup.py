@@ -1,62 +1,100 @@
 import time
+import os
 from datetime import datetime, timedelta
 from database import SessionLocal
 from models import LeadDB
 from telegram import Bot
-import os
+from dotenv import load_dotenv
 
-bot = Bot(token=os.getenv("TELEGRAM_TOKEN"))
+load_dotenv()
+
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+
+if not TOKEN:
+    print("❌ TELEGRAM TOKEN TIDAK ADA (FOLLOWUP)")
+    bot = None
+else:
+    bot = Bot(token=TOKEN)
+    print("✅ FOLLOWUP BOT READY")
+
+
+def get_followup_message(status):
+    if status == "COLD":
+        return """Kak, tadi sempat tanya soal program ya 😊
+
+Kalau boleh tahu, anaknya lagi fokus membaca atau menulis?"""
+
+    elif status == "WARM":
+        return """Programnya cocok banget buat usia anak kak 📚
+
+Kita bisa mulai dari trial dulu biar lihat hasilnya
+
+Mau aku bantu atur jadwalnya?"""
+
+    elif status == "HOT":
+        return """Slot minggu ini hampir penuh kak 😊
+
+Kalau mau, aku bantu amankan tempatnya sekarang ya"""
+
+    return None
+
+
+def should_followup(lead):
+    now = datetime.utcnow()
+
+    if not lead.last_chat:
+        return False
+
+    delay_map = {
+        "COLD": 10,
+        "WARM": 60,
+        "HOT": 180
+    }
+
+    delay = delay_map.get(lead.status, 60)
+    last_time = lead.last_followup or lead.last_chat
+
+    return now - last_time > timedelta(minutes=delay)
+
 
 def run_followup():
-    print("🔥 FOLLOW UP JALAN...")
+    print("🚀 FOLLOWUP SYSTEM START")
 
     while True:
         db = SessionLocal()
 
-        now = datetime.utcnow()
+        try:
+            leads = db.query(LeadDB).all()
 
-        leads = db.query(LeadDB).all()
+            for lead in leads:
+                try:
+                    if not bot:
+                        continue
 
-        for lead in leads:
-            if not lead.last_chat:
-                continue
+                    if not lead.whatsapp:
+                        continue
 
-            diff = now - lead.last_chat
+                    if should_followup(lead):
+                        msg = get_followup_message(lead.status)
 
-            # =========================
-            # 10 MENIT
-            # =========================
-            if timedelta(minutes=10) < diff < timedelta(minutes=11):
-                send_message(lead.whatsapp,
-                    "Halo kak 😊\nMasih mau tanya-tanya soal programnya?"
-                )
+                        if msg:
+                            print(f"📤 FOLLOWUP KE {lead.whatsapp}")
 
-            # =========================
-            # 1 JAM
-            # =========================
-            elif timedelta(hours=1) < diff < timedelta(hours=1, minutes=5):
-                send_message(lead.whatsapp,
-                    "Kak, kebetulan slot trial minggu ini terbatas 📚\nMau aku bantu cek jadwalnya?"
-                )
+                            bot.send_message(
+                                chat_id=lead.whatsapp,
+                                text=msg
+                            )
 
-            # =========================
-            # 1 HARI
-            # =========================
-            elif timedelta(days=1) < diff < timedelta(days=1, minutes=5):
-                send_message(lead.whatsapp,
-                    "Kak 😊\nProgram ini cocok banget buat anak yang baru mulai baca\n\nKalau mau, kita bisa coba trial dulu ya"
-                )
+                            lead.last_followup = datetime.utcnow()
+                            db.commit()
 
-        db.close()
+                except Exception as e:
+                    print("❌ ERROR FOLLOWUP USER:", e)
+
+        except Exception as e:
+            print("❌ ERROR DB FOLLOWUP:", e)
+
+        finally:
+            db.close()
+
         time.sleep(60)
-
-
-def send_message(user_id, text):
-    try:
-        bot.send_message(
-            chat_id=user_id,
-            text=text
-        )
-        print("📤 FOLLOW UP:", user_id)
-    except Exception as e:
-        print("❌ ERROR FOLLOW UP:", e)
