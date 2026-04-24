@@ -1,100 +1,29 @@
-import time
-import os
-from datetime import datetime, timedelta
-from database import SessionLocal
-from models import LeadDB
-from telegram import Bot
-from dotenv import load_dotenv
+from sqlalchemy import Column, Integer, String, DateTime
+from datetime import datetime
+from database import Base
 
-load_dotenv()
+class LeadDB(Base):
+    __tablename__ = "leads"
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")
+    id = Column(Integer, primary_key=True, index=True)
 
-if not TOKEN:
-    print("❌ TELEGRAM TOKEN TIDAK ADA (FOLLOWUP)")
-    bot = None
-else:
-    bot = Bot(token=TOKEN)
-    print("✅ FOLLOWUP BOT READY")
+    nama_orangtua = Column(String, nullable=True)
+    nama_anak = Column(String, nullable=True)
+    umur_anak = Column(String, nullable=True)
+    whatsapp = Column(String, nullable=True)
 
+    status = Column(String, default="COLD")
 
-def get_followup_message(status):
-    if status == "COLD":
-        return """Kak, tadi sempat tanya soal program ya 😊
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_chat = Column(DateTime, default=datetime.utcnow)
+    chat_history = Column(String, nullable=True)
 
-Kalau boleh tahu, anaknya lagi fokus membaca atau menulis?"""
+    # 🔥 WAJIB untuk followup system
+    last_followup = Column(DateTime, nullable=True)
+    lead_score = Column(Integer, default=0)
+    next_followup = Column(DateTime, nullable=True)
+    followup_count = Column(Integer, default=0)
 
-    elif status == "WARM":
-        return """Programnya cocok banget buat usia anak kak 📚
-
-Kita bisa mulai dari trial dulu biar lihat hasilnya
-
-Mau aku bantu atur jadwalnya?"""
-
-    elif status == "HOT":
-        return """Slot minggu ini hampir penuh kak 😊
-
-Kalau mau, aku bantu amankan tempatnya sekarang ya"""
-
-    return None
-
-
-def should_followup(lead):
-    now = datetime.utcnow()
-
-    if not lead.last_chat:
-        return False
-
-    delay_map = {
-        "COLD": 10,
-        "WARM": 60,
-        "HOT": 180
-    }
-
-    delay = delay_map.get(lead.status, 60)
-    last_time = lead.last_followup or lead.last_chat
-
-    return now - last_time > timedelta(minutes=delay)
-
-
-def run_followup():
-    print("🚀 FOLLOWUP SYSTEM START")
-
-    while True:
-        db = SessionLocal()
-
-        try:
-            leads = db.query(LeadDB).all()
-
-            for lead in leads:
-                try:
-                    if not bot:
-                        continue
-
-                    if not lead.whatsapp:
-                        continue
-
-                    if should_followup(lead):
-                        msg = get_followup_message(lead.status)
-
-                        if msg:
-                            print(f"📤 FOLLOWUP KE {lead.whatsapp}")
-
-                            bot.send_message(
-                                chat_id=lead.whatsapp,
-                                text=msg
-                            )
-
-                            lead.last_followup = datetime.utcnow()
-                            db.commit()
-
-                except Exception as e:
-                    print("❌ ERROR FOLLOWUP USER:", e)
-
-        except Exception as e:
-            print("❌ ERROR DB FOLLOWUP:", e)
-
-        finally:
-            db.close()
-
-        time.sleep(60)
+    # 🔥 AI LEARNING
+    converted = Column(Integer, default=0)  # 0 = belum, 1 = sudah daftar
+    response_count = Column(Integer, default=0)
