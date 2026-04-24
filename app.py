@@ -37,24 +37,37 @@ print("✅ Hidup")
 
 @app.post("/webhook/telegram")
 async def telegram_webhook(request: Request):
-    data = await request.json()
-    print("🔥 WEBHOOK MASUK:", data)
+    try:
+        data = await request.json()
+        print("🔥 WEBHOOK MASUK:", data)
 
-    if "message" not in data:
+        if "message" not in data:
+            print("❌ BUKAN MESSAGE")
+            return {"ok": True}
+
+        message = data["message"].get("text", "")
+        user_id = data["message"]["chat"]["id"]
+
+        print("👤 USER:", user_id)
+        print("💬 MSG:", message)
+
+        import asyncio
+        result = await asyncio.to_thread(run_ai, str(user_id), message)
+
+        print("🤖 AI RESULT:", result)
+
+        await bot.send_message(
+            chat_id=user_id,
+            text=result["reply"]
+        )
+
+        print("✅ PESAN TERKIRIM")
+
         return {"ok": True}
 
-    message = data["message"].get("text", "")
-    user_id = data["message"]["chat"]["id"]
-
-    result = run_ai(str(user_id), message)
-
-    await bot.send_message(
-        chat_id=user_id,
-        text=result["reply"]
-    )
-
-    return {"ok": True}
-print("✅ Webhook Ready")
+    except Exception as e:
+        print("❌ ERROR BESAR:", e)
+        return {"ok": True}
 
 # =========================
 # API CHAT (TEST)
@@ -73,7 +86,6 @@ print("✅ API Jalan")
 # =========================
 @app.get("/dashboard")
 def dashboard(request: Request, status: str = None, q: str = None):
-    print 
     db = SessionLocal()
     query = db.query(LeadDB)
 
