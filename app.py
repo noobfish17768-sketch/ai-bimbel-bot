@@ -111,7 +111,6 @@ async def login(request: Request):
         db.close()
 
     return templates.TemplateResponse(
-        request,
         "login.html",
         {"request": request}
     )
