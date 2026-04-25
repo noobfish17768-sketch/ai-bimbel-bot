@@ -9,6 +9,22 @@
 
 <p>Total Leads: {{ leads | length }}</p>
 
+<!-- FILTER -->
+<p>
+    <a href="/dashboard">ALL</a> |
+    <a href="/dashboard?status=COLD">COLD</a> |
+    <a href="/dashboard?status=WARM">WARM</a> |
+    <a href="/dashboard?status=HOT">HOT</a>
+</p>
+
+<!-- SEARCH -->
+<form method="get" action="/dashboard">
+    <input type="text" name="q" placeholder="Cari nama / WA">
+    <button type="submit">Search</button>
+</form>
+
+<br>
+
 <table border="1" cellpadding="10">
     <tr>
         <th>Nama Ortu</th>
@@ -25,26 +41,27 @@
         <td>{{ lead.nama_anak }}</td>
         <td>{{ lead.umur_anak }}</td>
         <td>{{ lead.whatsapp }}</td>
-        <td>{{ lead.status }}</td>
-        <td>
-            <a href="/dashboard">ALL</a> |
-            <a href="/dashboard?status=COLD">COLD</a> |
-            <a href="/dashboard?status=WARM">WARM</a> |
-            <a href="/dashboard?status=HOT">HOT</a>
-            <a href="/update-status/{{ lead.id }}/COLD">COLD</a> |
-            <a href="/update-status/{{ lead.id }}/WARM">WARM</a> |
-            <a href="/update-status/{{ lead.id }}/HOT">HOT</a>
+
+        <!-- STATUS COLORED -->
         <td>
             {% if lead.status == "HOT" %}
-                <span style="color:red;"><b>{{ lead.status }}</b></span>
+                <span style="color:red;"><b>HOT</b></span>
             {% elif lead.status == "WARM" %}
-                <span style="color:orange;"><b>{{ lead.status }}</b></span>
+                <span style="color:orange;"><b>WARM</b></span>
             {% else %}
                 <span style="color:gray;">{{ lead.status }}</span>
             {% endif %}
         </td>
+
+        <!-- ACTION -->
+        <td>
+            <a href="/update-status/{{ lead.id }}/COLD">COLD</a> |
+            <a href="/update-status/{{ lead.id }}/WARM">WARM</a> |
+            <a href="/update-status/{{ lead.id }}/HOT">HOT</a>
+        </td>
     </tr>
     {% endfor %}
+
 </table>
 
 </body>
