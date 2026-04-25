@@ -6,6 +6,7 @@ class LeadDB(Base):
     __tablename__ = "leads"
 
     id = Column(Integer, primary_key=True)
+    telegram_id = Column(String, unique=True)
 
     nama_orangtua = Column(String)
     nama_anak = Column(String)

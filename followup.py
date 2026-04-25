@@ -5,7 +5,13 @@ from models import LeadDB
 from telegram import Bot
 import os
 
-bot = Bot(token=os.getenv("TELEGRAM_TOKEN"))
+# =========================
+# SAFE BOT INIT
+# =========================
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+
+bot = Bot(token=TELEGRAM_TOKEN) if TELEGRAM_TOKEN else None
+
 
 # =========================
 # HITUNG DELAY BERDASARKAN SCORE
@@ -22,17 +28,12 @@ def get_delay(score):
 
 
 # =========================
-# GENERATE PESAN FOLLOWUP (AI STYLE)
+# GENERATE PESAN FOLLOWUP
 # =========================
 def generate_followup(lead):
-
     nama = lead.nama_orangtua or "kak"
-    status = lead.status
     score = getattr(lead, "lead_score", 0)
 
-    # =========================
-    # HOT → HARD CLOSE
-    # =========================
     if score > 85:
         return f"""Kak {nama}, aku bantu ringkas ya 😊
 
@@ -40,9 +41,6 @@ Biasanya orang tua ambil karena anak jadi lebih cepat lancar baca
 
 Kalau kakak sudah cocok, aku bisa bantu proses daftarnya sekarang"""
 
-    # =========================
-    # WARM → TRIAL PUSH
-    # =========================
     if score > 60:
         return f"""Kak {nama}, biasanya orang tua mulai dari trial dulu 😊
 
@@ -50,9 +48,6 @@ Dari situ bisa lihat perkembangan anaknya langsung
 
 Mau aku bantu cek jadwal trial yang tersedia?"""
 
-    # =========================
-    # MEDIUM → EDUKASI
-    # =========================
     if score > 30:
         return f"""Kak {nama}, program ini fokus bantu anak:
 
@@ -61,9 +56,6 @@ Mau aku bantu cek jadwal trial yang tersedia?"""
 
 Biasanya perubahan sudah mulai terlihat dalam beberapa pertemuan 😊"""
 
-    # =========================
-    # LOW → SOFT TOUCH
-    # =========================
     return f"""Kak {nama}, tadi sempat tanya ya 😊
 
 Kalau boleh tahu, anaknya sekarang lagi belajar membaca atau menulis?"""
@@ -87,52 +79,70 @@ def should_followup(lead):
 
 
 # =========================
-# ANTI SPAM (MAX 3 FOLLOWUP)
+# ANTI SPAM
 # =========================
 def can_send_again(lead):
-    count = getattr(lead, "followup_count", 0)
-    return count < 3
+    return (lead.followup_count or 0) < 3
 
 
 # =========================
-# MAIN LOOP
+# MAIN LOOP (SAFE VERSION)
 # =========================
 def run_followup():
     print("🚀 AI FOLLOWUP SYSTEM START")
 
+    if not bot:
+        print("❌ TELEGRAM BOT NOT INITIALIZED")
+        return
+
     while True:
         db = SessionLocal()
-        leads = db.query(LeadDB).all()
 
-        for lead in leads:
-            try:
-                if not lead.whatsapp:
-                    continue
+        try:
+            leads = db.query(LeadDB).all()
 
-                if not can_send_again(lead):
-                    continue
+            for lead in leads:
+                try:
+                    # =========================
+                    # VALIDATION
+                    # =========================
+                    if not lead.telegram_id:
+                        continue
 
-                if should_followup(lead):
+                    if not can_send_again(lead):
+                        continue
 
+                    if not should_followup(lead):
+                        continue
+
+                    # =========================
+                    # SEND MESSAGE
+                    # =========================
                     msg = generate_followup(lead)
 
-                    print(f"📤 FOLLOWUP KE {lead.whatsapp} | SCORE: {getattr(lead,'lead_score',0)}")
+                    print(f"📤 FOLLOWUP KE {lead.telegram_id} | SCORE: {getattr(lead,'lead_score',0)}")
 
                     bot.send_message(
-                        chat_id=lead.whatsapp,
+                        chat_id=lead.telegram_id,
                         text=msg
                     )
 
-                    # update DB
+                    # =========================
+                    # UPDATE DB SAFE
+                    # =========================
                     lead.last_followup = datetime.utcnow()
-
-                    if hasattr(lead, "followup_count"):
-                        lead.followup_count += 1
+                    lead.followup_count = (lead.followup_count or 0) + 1
 
                     db.commit()
 
-            except Exception as e:
-                print("❌ ERROR FOLLOWUP:", e)
+                except Exception as e:
+                    print(f"❌ ERROR PER LEAD {lead.id}: {e}")
+                    db.rollback()
 
-        db.close()
+        except Exception as e:
+            print("❌ FATAL FOLLOWUP ERROR:", e)
+
+        finally:
+            db.close()
+
         time.sleep(60)
