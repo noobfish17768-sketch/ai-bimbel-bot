@@ -7,3 +7,6 @@ python-dotenv
 jinja2
 psycopg2-binary
 python-telegram-bot==20.7
+itsdangerous
+passlib[bcrypt]
+bcrypt
