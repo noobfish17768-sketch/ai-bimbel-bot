@@ -103,7 +103,9 @@ def dashboard(request: Request, status: str = None, q: str = None):
         leads = query.all()
 
         print("🔥 RAW LEADS:", leads)
-
+        print("TYPE LEADS:", type(leads))
+        print("FIRST LEAD TYPE:", type(leads[0]) if leads else None)
+        
         leads_data = []
         for l in leads:
             print("ROW:", l)
