@@ -82,7 +82,10 @@ def root():
 def login_page(request: Request):
     return templates.TemplateResponse(
         "login.html",
-        {"request": request}
+        {
+            "request": request
+        },
+        request=request   # 🔥 WAJIB DI VERSI BARU
     )
 
 
@@ -108,11 +111,9 @@ async def login(request: Request):
         db.close()
 
     return templates.TemplateResponse(
+        request,
         "login.html",
-        {
-            "request": request,
-            "error": "Login gagal"
-        }
+        {"request": request}
     )
 
 
