@@ -96,31 +96,25 @@ def dashboard(request: Request, status: str = None, q: str = None):
     db = SessionLocal()
 
     try:
+        print("🔥 DASHBOARD HIT")
+
         query = db.query(LeadDB)
-
-        if status:
-            query = query.filter(LeadDB.status == status)
-
-        if q:
-            query = query.filter(
-                or_(
-                    LeadDB.nama_orangtua.contains(q),
-                    LeadDB.whatsapp.contains(q)
-                )
-            )
 
         leads = query.all()
 
-        # 🔥 FORCE CLEAN SERIALIZATION
+        print("🔥 RAW LEADS:", leads)
+
         leads_data = []
         for l in leads:
+            print("ROW:", l)
+
             leads_data.append({
                 "id": l.id,
-                "nama_orangtua": l.nama_orangtua or "",
-                "nama_anak": l.nama_anak or "",
-                "umur_anak": l.umur_anak or "",
-                "whatsapp": l.whatsapp or "",
-                "status": l.status or "COLD"
+                "nama_orangtua": l.nama_orangtua,
+                "nama_anak": l.nama_anak,
+                "umur_anak": l.umur_anak,
+                "whatsapp": l.whatsapp,
+                "status": l.status
             })
 
         return templates.TemplateResponse(
@@ -132,7 +126,7 @@ def dashboard(request: Request, status: str = None, q: str = None):
         )
 
     except Exception as e:
-        print("🔥 DASHBOARD ERROR:", e)
+        print("🔥 ERROR DASHBOARD:", repr(e))
         return {"error": str(e)}
 
     finally:
