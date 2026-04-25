@@ -9,30 +9,29 @@ import os
 # SAFE BOT INIT
 # =========================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-
 bot = Bot(token=TELEGRAM_TOKEN) if TELEGRAM_TOKEN else None
 
 
 # =========================
-# HITUNG DELAY BERDASARKAN SCORE
+# DELAY RULE
 # =========================
 def get_delay(score):
     if score < 30:
-        return 360  # 6 jam
+        return 360
     elif score < 60:
-        return 120  # 2 jam
+        return 120
     elif score < 85:
-        return 45   # 45 menit
+        return 45
     else:
-        return 15   # 15 menit
+        return 15
 
 
 # =========================
-# GENERATE PESAN FOLLOWUP
+# MESSAGE GENERATOR
 # =========================
 def generate_followup(lead):
     nama = lead.nama_orangtua or "kak"
-    score = getattr(lead, "lead_score", 0)
+    score = lead.lead_score or 0
 
     if score > 85:
         return f"""Kak {nama}, aku bantu ringkas ya 😊
@@ -62,31 +61,29 @@ Kalau boleh tahu, anaknya sekarang lagi belajar membaca atau menulis?"""
 
 
 # =========================
-# CEK PERLU FOLLOWUP
+# FOLLOWUP CHECK
 # =========================
 def should_followup(lead):
-    now = datetime.utcnow()
-
     if not lead.last_chat:
         return False
 
-    score = getattr(lead, "lead_score", 0)
-    delay_minutes = get_delay(score)
+    now = datetime.utcnow()
+    delay = get_delay(lead.lead_score or 0)
 
     last_time = lead.last_followup or lead.last_chat
 
-    return now - last_time > timedelta(minutes=delay_minutes)
+    return now - last_time > timedelta(minutes=delay)
 
 
 # =========================
-# ANTI SPAM
+# ANTI SPAM LIMIT
 # =========================
 def can_send_again(lead):
     return (lead.followup_count or 0) < 3
 
 
 # =========================
-# MAIN LOOP (SAFE VERSION)
+# MAIN LOOP (FIXED)
 # =========================
 def run_followup():
     print("🚀 AI FOLLOWUP SYSTEM START")
@@ -120,7 +117,7 @@ def run_followup():
                     # =========================
                     msg = generate_followup(lead)
 
-                    print(f"📤 FOLLOWUP KE {lead.telegram_id} | SCORE: {getattr(lead,'lead_score',0)}")
+                    print(f"📤 FOLLOWUP KE {lead.telegram_id} | SCORE: {lead.lead_score}")
 
                     bot.send_message(
                         chat_id=lead.telegram_id,
@@ -128,10 +125,10 @@ def run_followup():
                     )
 
                     # =========================
-                    # UPDATE DB SAFE
+                    # SAFE DB UPDATE
                     # =========================
-                    lead.last_followup = datetime.utcnow()
                     lead.followup_count = (lead.followup_count or 0) + 1
+                    lead.last_followup = datetime.utcnow()
 
                     db.commit()
 

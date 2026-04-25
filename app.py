@@ -2,12 +2,11 @@ print("🚀 START APP")
 
 import os
 import asyncio
+import threading
 
 from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
-
-from sqlalchemy import or_
 
 from telegram import Bot
 
@@ -15,8 +14,6 @@ from database import engine, Base, SessionLocal
 from models import LeadDB
 from ai_service import run_ai
 from followup import run_followup
-
-import threading
 
 print("✅ Import OK")
 
@@ -89,7 +86,7 @@ def chat(data: dict):
 
 
 # =========================
-# DASHBOARD
+# DASHBOARD (FIXED)
 # =========================
 @app.get("/dashboard")
 def dashboard(request: Request, status: str = None, q: str = None):
@@ -98,15 +95,12 @@ def dashboard(request: Request, status: str = None, q: str = None):
     try:
         print("🔥 DASHBOARD HIT")
 
-        query = db.query(LeadDB)
-
-        leads = query.all()
+        leads = db.query(LeadDB).all()
 
         print("🔥 RAW LEADS:", leads)
-        print("TYPE LEADS:", type(leads))
-        print("FIRST LEAD TYPE:", type(leads[0]) if leads else None)
-        
+
         leads_data = []
+
         for l in leads:
             print("ROW:", l)
 
@@ -142,29 +136,35 @@ def dashboard(request: Request, status: str = None, q: str = None):
 def update_status(lead_id: int, status: str):
     db = SessionLocal()
 
-    lead = db.query(LeadDB).filter(LeadDB.id == lead_id).first()
+    try:
+        lead = db.query(LeadDB).filter(LeadDB.id == lead_id).first()
 
-    if lead:
-        lead.status = status.upper()
-        db.commit()
+        if lead:
+            lead.status = status.upper()
+            db.commit()
 
-    db.close()
+    except Exception as e:
+        print("❌ UPDATE STATUS ERROR:", e)
+        db.rollback()
+
+    finally:
+        db.close()
 
     return RedirectResponse("/dashboard", status_code=302)
 
 
 # =========================
-# STARTUP (FIXED)
+# STARTUP
 # =========================
 @app.on_event("startup")
 def startup():
     print("🚀 STARTUP INIT")
 
-    # 1. INIT DATABASE (WAJIB)
+    # init DB
     Base.metadata.create_all(bind=engine)
     print("✅ DB initialized")
 
-    # 2. START FOLLOWUP BACKGROUND THREAD (SAFE)
+    # start followup thread
     try:
         thread = threading.Thread(
             target=run_followup,
@@ -176,5 +176,6 @@ def startup():
 
     except Exception as e:
         print("❌ Followup error:", e)
+
 
 print("✅ APP READY")
