@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bot Settings</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body {
+            font-family: Arial;
+            background: #f5f6fa;
+            padding: 20px;
+        }
+
+        .topbar {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+        }
+
+        .nav a {
+            margin-right:10px;
+            text-decoration:none;
+        }
+
+        .card {
+            background:white;
+            padding:20px;
+            border-radius:10px;
+            margin-top:20px;
+            box-shadow:0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        input {
+            padding:10px;
+            margin-right:10px;
+            border:1px solid #ccc;
+            border-radius:5px;
+        }
+
+        button {
+            padding:10px 15px;
+            border:none;
+            border-radius:5px;
+            background:#3498db;
+            color:white;
+            cursor:pointer;
+        }
+
+        button:hover {
+            background:#2980b9;
+        }
+
+        table {
+            width:100%;
+            border-collapse:collapse;
+            margin-top:20px;
+        }
+
+        th, td {
+            padding:10px;
+            border-bottom:1px solid #eee;
+            text-align:left;
+        }
+
+        .status-on {
+            color:green;
+            font-weight:bold;
+        }
+
+        .status-off {
+            color:red;
+            font-weight:bold;
+        }
+
+        .empty {
+            margin-top:20px;
+            color:gray;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="topbar">
+    <h2>⚙️ Bot Settings</h2>
+
+    <div class="nav">
+        <a href="/dashboard">Leads</a>
+        <a href="/conversations">Chats</a>
+        <a href="/settings">Settings</a>
+    </div>
+</div>
+
+<!-- TOGGLE BOT -->
+<div class="card">
+    <h3>Bot Control</h3>
+
+    {% set bot_status = "UNKNOWN" %}
+    {% for s in settings %}
+        {% if s.key == "bot_status" %}
+            {% set bot_status = s.value %}
+        {% endif %}
+    {% endfor %}
+
+    <p>
+        Status:
+        {% if bot_status == "ON" %}
+            <span class="status-on">ON</span>
+        {% elif bot_status == "OFF" %}
+            <span class="status-off">OFF</span>
+        {% else %}
+            <span>Belum di-set</span>
+        {% endif %}
+    </p>
+
+    <a href="/toggle-bot">
+        <button>Toggle ON / OFF</button>
+    </a>
+</div>
+
+<!-- ADD / UPDATE SETTING -->
+<div class="card">
+    <h3>Tambah / Update Setting</h3>
+
+    <form method="post" action="/settings">
+        <input type="text" name="key" placeholder="Key (contoh: welcome_message)" required>
+        <input type="text" name="value" placeholder="Value" required>
+        <button type="submit">Save</button>
+    </form>
+</div>
+
+<!-- LIST SETTINGS -->
+<div class="card">
+    <h3>Semua Settings</h3>
+
+    {% if settings and settings|length > 0 %}
+    <table>
+        <tr>
+            <th>Key</th>
+            <th>Value</th>
+        </tr>
+
+        {% for s in settings %}
+        <tr>
+            <td>{{ s.key }}</td>
+            <td>{{ s.value }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+        <p class="empty">Belum ada setting</p>
+    {% endif %}
+</div>
+
+</body>
+</html>

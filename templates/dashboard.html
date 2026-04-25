@@ -1,34 +1,112 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dashboard Leads</title>
+    <title>SaaS Dashboard Leads</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body {
+            font-family: Arial;
+            background: #f5f6fa;
+            padding: 20px;
+        }
+
+        .topbar {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+        }
+
+        .nav a {
+            margin-right:10px;
+            text-decoration:none;
+        }
+
+        .cards {
+            display:flex;
+            gap:10px;
+            margin:20px 0;
+        }
+
+        .card {
+            background:white;
+            padding:15px;
+            border-radius:10px;
+            flex:1;
+            box-shadow:0 2px 5px rgba(0,0,0,0.1);
+            text-align:center;
+        }
+
+        table {
+            width:100%;
+            background:white;
+            border-collapse:collapse;
+        }
+
+        th, td {
+            padding:10px;
+            border-bottom:1px solid #eee;
+        }
+
+        .badge {
+            padding:5px 10px;
+            border-radius:20px;
+            color:white;
+            font-size:12px;
+        }
+
+        .hot { background:red; }
+        .warm { background:orange; }
+        .cold { background:gray; }
+
+        .toolbar {
+            margin:10px 0;
+        }
+
+        .pagination {
+            margin-top:20px;
+        }
+    </style>
 </head>
+
 <body>
 
-<h1>📊 Dashboard Leads</h1>
+<div class="topbar">
+    <h2>📊 SaaS Leads Dashboard</h2>
 
-<p>Total Leads: {{ leads | length }}</p>
+    <div class="nav">
+        <a href="/dashboard">Leads</a>
+        <a href="/conversations">Chats</a>
+        <a href="/settings">Settings</a>
+    </div>
+</div>
+
+<!-- KPI -->
+<div class="cards">
+    <div class="card">Total<br><b>{{ total }}</b></div>
+    <div class="card">HOT<br><b>{{ leads | selectattr("status","equalto","HOT") | list | length }}</b></div>
+    <div class="card">WARM<br><b>{{ leads | selectattr("status","equalto","WARM") | list | length }}</b></div>
+    <div class="card">COLD<br><b>{{ leads | selectattr("status","equalto","COLD") | list | length }}</b></div>
+</div>
 
 <!-- FILTER -->
-<p>
+<div class="toolbar">
     <a href="/dashboard">ALL</a> |
     <a href="/dashboard?status=COLD">COLD</a> |
     <a href="/dashboard?status=WARM">WARM</a> |
     <a href="/dashboard?status=HOT">HOT</a>
-</p>
+</div>
 
 <!-- SEARCH -->
-<form method="get" action="/dashboard">
+<form method="get" action="/dashboard" class="toolbar">
     <input type="text" name="q" placeholder="Cari nama / WA">
     <button type="submit">Search</button>
 </form>
 
-<br>
-
-<table border="1" cellpadding="10">
+<!-- TABLE -->
+<table>
     <tr>
         <th>Nama Ortu</th>
-        <th>Nama Anak</th>
+        <th>Anak</th>
         <th>Umur</th>
         <th>WhatsApp</th>
         <th>Status</th>
@@ -37,23 +115,21 @@
 
     {% for lead in leads %}
     <tr>
-        <td>{{ lead.nama_orangtua }}</td>
-        <td>{{ lead.nama_anak }}</td>
-        <td>{{ lead.umur_anak }}</td>
+        <td>{{ lead.nama_orangtua or "-" }}</td>
+        <td>{{ lead.nama_anak or "-" }}</td>
+        <td>{{ lead.umur_anak or "-" }}</td>
         <td>{{ lead.whatsapp }}</td>
 
-        <!-- STATUS COLORED -->
         <td>
             {% if lead.status == "HOT" %}
-                <span style="color:red;"><b>HOT</b></span>
+                <span class="badge hot">HOT</span>
             {% elif lead.status == "WARM" %}
-                <span style="color:orange;"><b>WARM</b></span>
+                <span class="badge warm">WARM</span>
             {% else %}
-                <span style="color:gray;">{{ lead.status }}</span>
+                <span class="badge cold">COLD</span>
             {% endif %}
         </td>
 
-        <!-- ACTION -->
         <td>
             <a href="/update-status/{{ lead.id }}/COLD">COLD</a> |
             <a href="/update-status/{{ lead.id }}/WARM">WARM</a> |
@@ -61,8 +137,18 @@
         </td>
     </tr>
     {% endfor %}
-
 </table>
+
+<!-- PAGINATION -->
+<div class="pagination">
+    {% if page > 1 %}
+        <a href="/dashboard?page={{ page - 1 }}">⬅ Prev</a>
+    {% endif %}
+
+    <span>Page {{ page }}</span>
+
+    <a href="/dashboard?page={{ page + 1 }}">Next ➡</a>
+</div>
 
 </body>
 </html>

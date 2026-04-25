@@ -2,7 +2,7 @@ import json
 import os
 from openai import OpenAI
 from database import SessionLocal
-from models import LeadDB
+from models import LeadDB, Conversation, BotSetting
 from dotenv import load_dotenv
 from datetime import datetime
 
@@ -12,8 +12,20 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 MAX_HISTORY = 6
 
+
 # =========================
-# SYSTEM PROMPT (SMART AI)
+# ⚙️ BOT SETTING
+# =========================
+def get_setting(key, default=None):
+    db = SessionLocal()
+    setting = db.query(BotSetting).filter_by(key=key).first()
+    db.close()
+
+    return setting.value if setting else default
+
+
+# =========================
+# SYSTEM PROMPT (JANGAN DIUBAH)
 # =========================
 SYSTEM_PROMPT = """
 Kamu adalah CS + Sales profesional untuk bimbel anak.
@@ -61,8 +73,9 @@ OUTPUT JSON:
 }
 """
 
+
 # =========================
-# GET USER
+# GET LEAD
 # =========================
 def get_lead(user_id):
     db = SessionLocal()
@@ -74,7 +87,25 @@ def get_lead(user_id):
 
 
 # =========================
-# HISTORY HANDLING
+# SAVE CONVERSATION
+# =========================
+def save_conversation(user_id, message, response, lead_id=None):
+    db = SessionLocal()
+
+    chat = Conversation(
+        user_id=user_id,
+        message=message,
+        response=response,
+        lead_id=lead_id
+    )
+
+    db.add(chat)
+    db.commit()
+    db.close()
+
+
+# =========================
+# HISTORY
 # =========================
 def load_history(user):
     if not user or not user.chat_history:
@@ -88,6 +119,7 @@ def load_history(user):
 
 def save_history(user_id, history):
     db = SessionLocal()
+
     user = db.query(LeadDB).filter(
         LeadDB.whatsapp == user_id
     ).first()
@@ -131,21 +163,7 @@ def format_reply(text):
         return text
 
     lines = text.strip().split("\n")
-    cleaned = []
-
-    for line in lines:
-        line = line.strip()
-
-        if not line:
-            cleaned.append("")
-            continue
-
-        if not line.startswith(("•", "-", "📚")):
-            line = line[:1].upper() + line[1:]
-
-        cleaned.append(line)
-
-    return "\n".join(cleaned)
+    return "\n".join([l.strip() for l in lines])
 
 
 # =========================
@@ -167,8 +185,8 @@ def detect_status(message, current_status):
 # SCORING
 # =========================
 def calculate_score(message, status, prev_score):
-    msg = message.lower()
     score = prev_score or 0
+    msg = message.lower()
 
     score += 5
 
@@ -185,38 +203,39 @@ def calculate_score(message, status, prev_score):
 
 
 # =========================
-# UPDATE LAST CHAT
+# MAIN AI
 # =========================
-def update_last_chat(user_id):
+def run_ai(user_id: str, message: str, owner_id: int = 1):
+    """
+    owner_id:
+    sementara default = 1 (admin)
+    nanti bisa diganti multi-bot
+    """
+
+    # 🔥 BOT CONTROL
+    bot_status = get_setting("bot_status", "ON")
+
+    if bot_status == "OFF":
+        return {
+            "reply": "Admin sedang mematikan bot 🙏",
+            "lead": {},
+            "status": "COLD"
+        }
+
     db = SessionLocal()
 
     user = db.query(LeadDB).filter(
         LeadDB.whatsapp == user_id
     ).first()
 
-    if user:
-        user.last_chat = datetime.utcnow()
-        db.commit()
-
-    db.close()
-
-
-# =========================
-# MAIN AI
-# =========================
-def run_ai(user_id: str, message: str):
-
-    user = get_lead(user_id)
-
     history = load_history(user)
-    is_first_chat = len(history) == 0
 
     nama = user.nama_orangtua if user else ""
     current_status = user.status if user else "COLD"
     prev_score = user.lead_score if user else 0
 
     # =========================
-    # APPEND USER MESSAGE
+    # USER MESSAGE
     # =========================
     history.append({
         "role": "user",
@@ -224,18 +243,20 @@ def run_ai(user_id: str, message: str):
     })
 
     # =========================
-    # SYSTEM CONTEXT
+    # CONTEXT (UPGRADE)
     # =========================
     system_context = SYSTEM_PROMPT + f"""
 
-KONDISI: {'CHAT_PERTAMA' if is_first_chat else 'LANJUTAN'}
+KONDISI: {'CHAT_PERTAMA' if len(history) == 1 else 'LANJUTAN'}
 NAMA_USER: {nama}
 STATUS_LEAD: {current_status}
 JUMLAH_CHAT: {len(history)}
+LAST_ACTIVITY: {user.last_chat if user else "NONE"}
+LEAD_SCORE: {prev_score}
 """
 
     # =========================
-    # CALL AI
+    # AI CALL
     # =========================
     try:
         response = client.responses.create(
@@ -250,7 +271,8 @@ JUMLAH_CHAT: {len(history)}
         ai_text = response.output_text
 
     except Exception as e:
-        print("❌ AI ERROR:", e)
+        print("AI ERROR:", e)
+        db.close()
         return {
             "reply": "Maaf kak, lagi gangguan 🙏",
             "lead": {},
@@ -259,89 +281,59 @@ JUMLAH_CHAT: {len(history)}
 
     data = safe_parse(ai_text)
 
-    if not data.get("lead"):
-        data["lead"] = {}
-
     # =========================
-    # STATUS UPDATE
+    # STATUS
     # =========================
-    detected = detect_status(message, current_status)
-
-    priority = {"COLD": 1, "WARM": 2, "HOT": 3}
-
-    if priority[detected] > priority[current_status]:
-        data["status"] = detected
-    else:
-        data["status"] = current_status
+    new_status = detect_status(message, current_status)
 
     # =========================
     # SCORING
     # =========================
-    score = calculate_score(message, data["status"], prev_score)
-    data["lead_score"] = score
+    score = calculate_score(message, new_status, prev_score)
 
     # =========================
     # FORMAT
     # =========================
-    data["reply"] = format_reply(data["reply"])
+    reply = format_reply(data.get("reply", ""))
 
     # =========================
-    # SAVE DB
+    # SAVE / UPDATE LEAD (🔥 MULTI TENANT)
     # =========================
-    save_lead(data, user_id)
-    update_last_chat(user_id)
+    if user:
+        user.status = new_status
+        user.lead_score = score
+        user.last_chat = datetime.utcnow()
+    else:
+        user = LeadDB(
+            whatsapp=user_id,
+            status=new_status,
+            lead_score=score,
+            last_chat=datetime.utcnow(),
+            owner_id=owner_id   # 🔥 PENTING
+        )
+        db.add(user)
+
+    db.commit()
+
+    # =========================
+    # SAVE CONVERSATION
+    # =========================
+    save_conversation(user_id, message, reply, user.id)
 
     # =========================
     # SAVE HISTORY
     # =========================
     history.append({
         "role": "assistant",
-        "content": data["reply"]
+        "content": reply
     })
 
     save_history(user_id, history)
 
-    return data
-
-
-# =========================
-# SAVE LEAD
-# =========================
-def save_lead(data, user_id):
-    lead = data.get("lead", {})
-    status = data.get("status", "COLD")
-    score = data.get("lead_score", 0)
-
-    db = SessionLocal()
-
-    existing = db.query(LeadDB).filter(
-        LeadDB.whatsapp == user_id
-    ).first()
-
-    if existing:
-        existing.status = status
-        existing.lead_score = score
-        existing.last_chat = datetime.utcnow()
-
-        if lead.get("nama_orangtua"):
-            existing.nama_orangtua = lead["nama_orangtua"]
-
-        if lead.get("nama_anak"):
-            existing.nama_anak = lead["nama_anak"]
-
-        if lead.get("umur_anak"):
-            existing.umur_anak = lead["umur_anak"]
-
-    else:
-        db.add(LeadDB(
-            whatsapp=user_id,
-            nama_orangtua=lead.get("nama_orangtua"),
-            nama_anak=lead.get("nama_anak"),
-            umur_anak=lead.get("umur_anak"),
-            status=status,
-            lead_score=score,
-            last_chat=datetime.utcnow()
-        ))
-
-    db.commit()
     db.close()
+
+    return {
+        "reply": reply,
+        "status": new_status,
+        "lead_score": score
+    }

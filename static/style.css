@@ -1,0 +1,183 @@
+/* =========================
+   GLOBAL
+========================= */
+body {
+    font-family: Arial, sans-serif;
+    background: #f5f6fa;
+    margin: 0;
+    padding: 20px;
+}
+
+/* =========================
+   TOPBAR & NAV
+========================= */
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.nav a {
+    margin-right: 10px;
+    text-decoration: none;
+    color: #333;
+    font-weight: bold;
+}
+
+.nav a:hover {
+    color: #3498db;
+}
+
+/* =========================
+   CARDS (KPI / BOX)
+========================= */
+.cards {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.card {
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    flex: 1;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+/* =========================
+   TABLE
+========================= */
+table {
+    width: 100%;
+    background: white;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+}
+
+tr:hover {
+    background: #f9f9f9;
+}
+
+/* =========================
+   BADGE STATUS
+========================= */
+.badge {
+    padding: 5px 10px;
+    border-radius: 20px;
+    color: white;
+    font-size: 12px;
+}
+
+.hot {
+    background: #e74c3c;
+}
+
+.warm {
+    background: #f39c12;
+}
+
+.cold {
+    background: #7f8c8d;
+}
+
+/* =========================
+   TOOLBAR
+========================= */
+.toolbar {
+    margin: 10px 0;
+}
+
+/* =========================
+   BUTTON
+========================= */
+button {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 5px;
+    background: #3498db;
+    color: white;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #2980b9;
+}
+
+/* =========================
+   INPUT
+========================= */
+input {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+/* =========================
+   PAGINATION
+========================= */
+.pagination {
+    margin-top: 20px;
+}
+
+/* =========================
+   LOGIN
+========================= */
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.login-box {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    width: 300px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+/* =========================
+   CHAT BUBBLE
+========================= */
+.user {
+    background: #e3f2fd;
+    padding: 8px;
+    border-radius: 8px;
+    margin-bottom: 5px;
+}
+
+.bot {
+    background: #f1f1f1;
+    padding: 8px;
+    border-radius: 8px;
+}
+
+/* =========================
+   SETTINGS
+========================= */
+.status-on {
+    color: green;
+    font-weight: bold;
+}
+
+.status-off {
+    color: red;
+    font-weight: bold;
+}
+
+/* =========================
+   EMPTY STATE
+========================= */
+.empty {
+    margin-top: 20px;
+    color: gray;
+}

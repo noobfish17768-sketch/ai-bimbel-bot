@@ -7,18 +7,51 @@ import threading
 from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+
+from starlette.middleware.sessions import SessionMiddleware
+
+from passlib.context import CryptContext
 
 from telegram import Bot
 
 from database import engine, Base, SessionLocal
-from models import LeadDB
+from models import LeadDB, Conversation, BotSetting, User
 from ai_service import run_ai
 from followup import run_followup
 
 print("✅ Import OK")
 
 app = FastAPI()
+
+# =========================
+# SESSION
+# =========================
+app.add_middleware(SessionMiddleware, secret_key="super-secret-key")
+
+# =========================
+# STATIC FILES
+# =========================
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 templates = Jinja2Templates(directory="templates")
+
+# =========================
+# PASSWORD HASH
+# =========================
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def verify_password(plain, hashed):
+    return pwd_context.verify(plain, hashed)
+
+
+def hash_password(password):
+    return pwd_context.hash(password)
+
+
+def get_current_user(request: Request):
+    return request.session.get("user_id")
 
 
 # =========================
@@ -43,13 +76,89 @@ def root():
 
 
 # =========================
+# 🔐 LOGIN PAGE
+# =========================
+@app.get("/login")
+def login_page(request: Request):
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request}
+    )
+
+
+# =========================
+# 🔐 LOGIN PROCESS
+# =========================
+@app.post("/login")
+async def login(request: Request):
+    db = SessionLocal()
+
+    form = await request.form()
+    username = form.get("username")
+    password = form.get("password")
+
+    try:
+        user = db.query(User).filter_by(username=username).first()
+
+        if user and verify_password(password, user.password):
+            request.session["user_id"] = user.id
+            return RedirectResponse("/dashboard", status_code=302)
+
+    finally:
+        db.close()
+
+    return templates.TemplateResponse(
+        "login.html",
+        {
+            "request": request,
+            "error": "Login gagal"
+        }
+    )
+
+
+# =========================
+# 🔐 LOGOUT
+# =========================
+@app.get("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/login", status_code=302)
+
+
+# =========================
+# 👤 CREATE ADMIN
+# =========================
+@app.get("/create-admin")
+def create_admin():
+    db = SessionLocal()
+
+    try:
+        existing = db.query(User).filter_by(username="admin").first()
+
+        if existing:
+            return {"msg": "Admin sudah ada"}
+
+        user = User(
+            username="admin",
+            password=hash_password("admin123")
+        )
+
+        db.add(user)
+        db.commit()
+
+        return {"msg": "Admin berhasil dibuat"}
+
+    finally:
+        db.close()
+
+
+# =========================
 # TELEGRAM WEBHOOK
 # =========================
 @app.post("/webhook/telegram")
 async def telegram_webhook(request: Request):
     try:
         data = await request.json()
-        print("🔥 WEBHOOK:", data)
 
         if "message" not in data:
             return {"ok": True}
@@ -59,6 +168,7 @@ async def telegram_webhook(request: Request):
 
         print(f"👤 {user_id} | 💬 {message}")
 
+        # ⚠️ sementara owner_id = 1 (admin default)
         result = await asyncio.to_thread(run_ai, str(user_id), message)
 
         if bot:
@@ -86,66 +196,167 @@ def chat(data: dict):
 
 
 # =========================
-# DASHBOARD (FIXED)
+# 📊 DASHBOARD (MULTI TENANT)
 # =========================
 @app.get("/dashboard")
-def dashboard(request: Request, status: str = None, q: str = None):
+def dashboard(request: Request, status: str = None, q: str = None, page: int = 1):
+
+    user_id = get_current_user(request)
+
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
+
     db = SessionLocal()
 
     try:
-        print("🔥 DASHBOARD HIT")
+        per_page = 10
 
-        leads = db.query(LeadDB).all()
+        # 🔥 FILTER OWNER
+        query = db.query(LeadDB).filter(LeadDB.owner_id == user_id)
 
-        print("🔥 RAW LEADS:", leads)
+        if status:
+            query = query.filter(LeadDB.status == status)
 
-        leads_data = []
+        if q:
+            query = query.filter(
+                LeadDB.nama_orangtua.ilike(f"%{q}%") |
+                LeadDB.whatsapp.ilike(f"%{q}%")
+            )
 
-        for l in leads:
-            print("ROW:", l)
+        total = query.count()
 
-            leads_data.append({
-                "id": l.id,
-                "nama_orangtua": l.nama_orangtua,
-                "nama_anak": l.nama_anak,
-                "umur_anak": l.umur_anak,
-                "whatsapp": l.whatsapp,
-                "status": l.status
-            })
+        leads = query.order_by(LeadDB.created_at.desc()) \
+                     .offset((page - 1) * per_page) \
+                     .limit(per_page) \
+                     .all()
 
         return templates.TemplateResponse(
             "dashboard.html",
             {
                 "request": request,
-                "leads": leads_data
+                "leads": leads,
+                "total": total,
+                "page": page
             }
         )
-
-    except Exception as e:
-        print("🔥 ERROR DASHBOARD:", repr(e))
-        return {"error": str(e)}
 
     finally:
         db.close()
 
 
 # =========================
-# UPDATE STATUS
+# 💬 CONVERSATIONS (FILTER OWNER)
 # =========================
-@app.get("/update-status/{lead_id}/{status}")
-def update_status(lead_id: int, status: str):
+@app.get("/conversations")
+def conversations(request: Request):
+
+    user_id = get_current_user(request)
+
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
+
     db = SessionLocal()
 
     try:
-        lead = db.query(LeadDB).filter(LeadDB.id == lead_id).first()
+        chats = db.query(Conversation) \
+            .join(LeadDB, Conversation.lead_id == LeadDB.id) \
+            .filter(LeadDB.owner_id == user_id) \
+            .order_by(Conversation.created_at.desc()) \
+            .limit(50) \
+            .all()
+
+        return templates.TemplateResponse(
+            "conversations.html",
+            {
+                "request": request,
+                "chats": chats
+            }
+        )
+
+    finally:
+        db.close()
+
+
+# =========================
+# ⚙️ SETTINGS
+# =========================
+@app.get("/settings")
+def settings(request: Request):
+
+    if not get_current_user(request):
+        return RedirectResponse("/login", status_code=302)
+
+    db = SessionLocal()
+
+    try:
+        settings = db.query(BotSetting).all()
+
+        return templates.TemplateResponse(
+            "settings.html",
+            {
+                "request": request,
+                "settings": settings
+            }
+        )
+
+    finally:
+        db.close()
+
+
+@app.post("/settings")
+async def update_settings(request: Request):
+
+    if not get_current_user(request):
+        return RedirectResponse("/login", status_code=302)
+
+    db = SessionLocal()
+
+    form = await request.form()
+    key = form.get("key")
+    value = form.get("value")
+
+    try:
+        setting = db.query(BotSetting).filter_by(key=key).first()
+
+        if setting:
+            setting.value = value
+        else:
+            db.add(BotSetting(key=key, value=value))
+
+        db.commit()
+
+    except Exception as e:
+        print("❌ SETTINGS ERROR:", e)
+        db.rollback()
+
+    finally:
+        db.close()
+
+    return RedirectResponse("/settings", status_code=302)
+
+
+# =========================
+# UPDATE STATUS (SECURE)
+# =========================
+@app.get("/update-status/{lead_id}/{status}")
+def update_status(request: Request, lead_id: int, status: str):
+
+    user_id = get_current_user(request)
+
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
+
+    db = SessionLocal()
+
+    try:
+        lead = db.query(LeadDB).filter(
+            LeadDB.id == lead_id,
+            LeadDB.owner_id == user_id
+        ).first()
 
         if lead:
             lead.status = status.upper()
             db.commit()
-
-    except Exception as e:
-        print("❌ UPDATE STATUS ERROR:", e)
-        db.rollback()
 
     finally:
         db.close()
@@ -160,11 +371,9 @@ def update_status(lead_id: int, status: str):
 def startup():
     print("🚀 STARTUP INIT")
 
-    # init DB
     Base.metadata.create_all(bind=engine)
     print("✅ DB initialized")
 
-    # start followup thread
     try:
         thread = threading.Thread(
             target=run_followup,
