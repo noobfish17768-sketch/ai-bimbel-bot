@@ -1,29 +1,31 @@
 print("🚀 START APP")
 
+import os
+import asyncio
+
 from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
 
-from database import engine, Base, SessionLocal
-from models import LeadDB
-from ai_service import run_ai
-
 from sqlalchemy import or_
 
 from telegram import Bot
-import os
-import asyncio
-import threading
 
+from database import engine, Base, SessionLocal
+from models import LeadDB
+from ai_service import run_ai
 from followup import run_followup
+
+import threading
 
 print("✅ Import OK")
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
+
 # =========================
-# INIT TELEGRAM BOT
+# TELEGRAM BOT INIT
 # =========================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
@@ -35,10 +37,8 @@ else:
     print("✅ Bot Telegram Ready")
 
 
-
-
 # =========================
-# ROOT (HEALTH CHECK)
+# ROOT
 # =========================
 @app.get("/")
 def root():
@@ -62,7 +62,6 @@ async def telegram_webhook(request: Request):
 
         print(f"👤 {user_id} | 💬 {message}")
 
-        # run AI non-blocking
         result = await asyncio.to_thread(run_ai, str(user_id), message)
 
         if bot:
@@ -70,17 +69,16 @@ async def telegram_webhook(request: Request):
                 chat_id=user_id,
                 text=result["reply"]
             )
-            print("✅ Reply terkirim")
 
         return {"ok": True}
 
     except Exception as e:
-        print("❌ ERROR WEBHOOK:", e)
+        print("❌ WEBHOOK ERROR:", e)
         return {"ok": True}
 
 
 # =========================
-# API CHAT (TEST)
+# CHAT TEST
 # =========================
 @app.post("/chat")
 def chat(data: dict):
@@ -121,9 +119,8 @@ def dashboard(request: Request, status: str = None, q: str = None):
     } for l in leads]
 
     return templates.TemplateResponse(
-        request=request,
-        name="dashboard.html",
-        context={"leads": leads_data}
+        "dashboard.html",
+        {"request": request, "leads": leads_data}
     )
 
 
@@ -142,16 +139,21 @@ def update_status(lead_id: int, status: str):
 
     db.close()
 
-    return RedirectResponse(url="/dashboard", status_code=302)
+    return RedirectResponse("/dashboard", status_code=302)
 
 
 # =========================
-# BACKGROUND JOB
+# STARTUP (FIXED)
 # =========================
 @app.on_event("startup")
-def start_background_jobs():
-    print("🚀 START BACKGROUND JOBS")
+def startup():
+    print("🚀 STARTUP INIT")
 
+    # 1. INIT DATABASE (WAJIB)
+    Base.metadata.create_all(bind=engine)
+    print("✅ DB initialized")
+
+    # 2. START FOLLOWUP BACKGROUND THREAD (SAFE)
     try:
         thread = threading.Thread(
             target=run_followup,
@@ -159,19 +161,10 @@ def start_background_jobs():
         )
         thread.start()
 
-        print("✅ Follow-up aktif")
+        print("✅ Follow-up thread started")
 
     except Exception as e:
-        print("❌ Gagal start followup:", e)
-        
-def init_db():
-    print("📦 Init DB...")
+        print("❌ Followup error:", e)
 
-    from database import Base, engine
-    import models  # 🔥 penting: force load model sekali
-
-    Base.metadata.create_all(bind=engine)
-
-    print("✅ DB Ready")
 
 print("✅ APP READY")
