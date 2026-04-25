@@ -34,12 +34,7 @@ else:
     bot = Bot(token=TELEGRAM_TOKEN)
     print("✅ Bot Telegram Ready")
 
-# =========================
-# INIT DATABASE
-# =========================
-print("📦 Create Table...")
-Base.metadata.create_all(bind=engine)
-print("✅ Table Ready")
+
 
 
 # =========================
@@ -168,6 +163,15 @@ def start_background_jobs():
 
     except Exception as e:
         print("❌ Gagal start followup:", e)
+        
+def init_db():
+    print("📦 Init DB...")
 
+    from database import Base, engine
+    import models  # 🔥 penting: force load model sekali
+
+    Base.metadata.create_all(bind=engine)
+
+    print("✅ DB Ready")
 
 print("✅ APP READY")

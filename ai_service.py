@@ -13,7 +13,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 MAX_HISTORY = 6
 
 # =========================
-# SYSTEM PROMPT
+# SYSTEM PROMPT (SMART AI)
 # =========================
 SYSTEM_PROMPT = """
 Kamu adalah CS + Sales profesional untuk bimbel anak.
@@ -26,15 +26,29 @@ Gaya:
 
 Funnel:
 - COLD → edukasi
-- WARM → trial
-- HOT → closing
+- WARM → arahkan trial
+- HOT → closing natural
 
-Aturan:
-- Jangan ulang kalimat
+ATURAN PENTING:
+- Jangan ulang kalimat sebelumnya
 - Jangan selalu closing
-- Variasikan gaya
+- Variasikan gaya komunikasi
+- Jangan selalu pakai "Halo kak"
+- Gunakan konteks chat sebelumnya
 
-Output JSON:
+CLOSING:
+- Lakukan hanya jika user sudah siap
+- Variasikan:
+  - "Mau aku bantu daftarkan?"
+  - "Kita bisa mulai dari trial dulu"
+  - "Mau aku cek jadwalnya?"
+  - "Lebih nyaman trial atau langsung daftar?"
+
+URGENCY:
+- Hanya jika user HOT
+- Jangan ulang "slot penuh"
+
+OUTPUT JSON:
 {
   "reply": "...",
   "lead": {
@@ -48,7 +62,7 @@ Output JSON:
 """
 
 # =========================
-# GET USER + HISTORY
+# GET USER
 # =========================
 def get_lead(user_id):
     db = SessionLocal()
@@ -59,6 +73,9 @@ def get_lead(user_id):
     return user
 
 
+# =========================
+# HISTORY HANDLING
+# =========================
 def load_history(user):
     if not user or not user.chat_history:
         return []
@@ -77,7 +94,7 @@ def save_history(user_id, history):
 
     if user:
         user.chat_history = json.dumps(history[-MAX_HISTORY:])
-        user.response_count += 1
+        user.response_count = (user.response_count or 0) + 1
         db.commit()
 
     db.close()
@@ -140,7 +157,7 @@ def detect_status(message, current_status):
     if any(x in msg for x in ["daftar", "join", "ikut"]):
         return "HOT"
 
-    if any(x in msg for x in ["harga", "jadwal", "info"]):
+    if any(x in msg for x in ["harga", "jadwal", "info", "berapa"]):
         return "WARM"
 
     return current_status
@@ -198,19 +215,28 @@ def run_ai(user_id: str, message: str):
     current_status = user.status if user else "COLD"
     prev_score = user.lead_score if user else 0
 
-    # append user msg
+    # =========================
+    # APPEND USER MESSAGE
+    # =========================
     history.append({
         "role": "user",
         "content": message
     })
 
+    # =========================
+    # SYSTEM CONTEXT
+    # =========================
     system_context = SYSTEM_PROMPT + f"""
 
 KONDISI: {'CHAT_PERTAMA' if is_first_chat else 'LANJUTAN'}
 NAMA_USER: {nama}
 STATUS_LEAD: {current_status}
+JUMLAH_CHAT: {len(history)}
 """
 
+    # =========================
+    # CALL AI
+    # =========================
     try:
         response = client.responses.create(
             model="gpt-4.1-mini",
@@ -265,7 +291,9 @@ STATUS_LEAD: {current_status}
     save_lead(data, user_id)
     update_last_chat(user_id)
 
-    # append assistant
+    # =========================
+    # SAVE HISTORY
+    # =========================
     history.append({
         "role": "assistant",
         "content": data["reply"]
