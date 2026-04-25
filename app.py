@@ -105,7 +105,7 @@ def dashboard(request: Request, status: str = None, q: str = None):
         print("🔥 RAW LEADS:", leads)
         print("TYPE LEADS:", type(leads))
         print("FIRST LEAD TYPE:", type(leads[0]) if leads else None)
-
+        
         leads_data = []
         for l in leads:
             print("ROW:", l)
@@ -177,5 +177,4 @@ def startup():
     except Exception as e:
         print("❌ Followup error:", e)
 
-print("DEBUG DICT SAMPLE:", leads[0].__dict__)
 print("✅ APP READY")
