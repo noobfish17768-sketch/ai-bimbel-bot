@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Detail Lead</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="layout">
+
+    <div class="sidebar">
+        <h2>🚀 CRM</h2>
+        <a href="/dashboard">📊 Dashboard</a>
+        <a href="/conversations">💬 Conversations</a>
+        <a href="/settings">⚙️ Settings</a>
+    </div>
+
+    <div class="main">
+
+        <h1>Detail Lead</h1>
+
+        <div class="card">
+            <p><b>Nama Ortu:</b> {{ lead.nama_orangtua }}</p>
+            <p><b>Nama Anak:</b> {{ lead.nama_anak }}</p>
+            <p><b>Umur:</b> {{ lead.umur_anak }}</p>
+            <p><b>WhatsApp:</b> {{ lead.whatsapp }}</p>
+            <p><b>Status:</b> {{ lead.status }}</p>
+            <p><b>Score:</b> {{ lead.lead_score }}</p>
+        </div>
+
+        <div class="card">
+            <h3>Notes</h3>
+            <form method="post">
+                <textarea name="notes" rows="4">{{ lead.notes }}</textarea>
+                <br><br>
+                <button type="submit">Save Notes</button>
+            </form>
+        </div>
+
+    </div>
+</div>
+
+</body>
+</html>

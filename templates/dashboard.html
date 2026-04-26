@@ -1,154 +1,121 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SaaS Dashboard Leads</title>
+    <title>Dashboard Calistung</title>
     <link rel="stylesheet" href="/static/style.css">
-    <style>
-        body {
-            font-family: Arial;
-            background: #f5f6fa;
-            padding: 20px;
-        }
-
-        .topbar {
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-        }
-
-        .nav a {
-            margin-right:10px;
-            text-decoration:none;
-        }
-
-        .cards {
-            display:flex;
-            gap:10px;
-            margin:20px 0;
-        }
-
-        .card {
-            background:white;
-            padding:15px;
-            border-radius:10px;
-            flex:1;
-            box-shadow:0 2px 5px rgba(0,0,0,0.1);
-            text-align:center;
-        }
-
-        table {
-            width:100%;
-            background:white;
-            border-collapse:collapse;
-        }
-
-        th, td {
-            padding:10px;
-            border-bottom:1px solid #eee;
-        }
-
-        .badge {
-            padding:5px 10px;
-            border-radius:20px;
-            color:white;
-            font-size:12px;
-        }
-
-        .hot { background:red; }
-        .warm { background:orange; }
-        .cold { background:gray; }
-
-        .toolbar {
-            margin:10px 0;
-        }
-
-        .pagination {
-            margin-top:20px;
-        }
-    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
 
-<div class="topbar">
-    <h2>📊 SaaS Leads Dashboard</h2>
+<div class="layout">
 
-    <div class="nav">
-        <a href="/dashboard">Leads</a>
-        <a href="/conversations">Chats</a>
-        <a href="/settings">Settings</a>
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <h2>🚀 CRM</h2>
+        <a href="/dashboard">📊 Dashboard</a>
+        <a href="/conversations">💬 Chats</a>
+        <a href="/settings">⚙️ Settings</a>
+        <a href="/logout">🚪 Logout</a>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+
+        <h1>📊 Dashboard Leads</h1>
+
+        <!-- KPI CARDS -->
+        <div class="cards">
+            <div class="card">
+                <h3>Total</h3>
+                <p>{{ total | default(0) }}</p>
+            </div>
+
+            <div class="card hot">
+                <h3>HOT</h3>
+                <p>{{ hot | default(0) }}</p>
+            </div>
+
+            <div class="card warm">
+                <h3>WARM</h3>
+                <p>{{ warm | default(0) }}</p>
+            </div>
+
+            <div class="card cold">
+                <h3>COLD</h3>
+                <p>{{ cold | default(0) }}</p>
+            </div>
+        </div>
+
+        <!-- CHART -->
+        <canvas id="leadChart"></canvas>
+
+        <!-- TABLE -->
+        <table>
+            <tr>
+                <th>Nama</th>
+                <th>Anak</th>
+                <th>WA</th>
+                <th>Status</th>
+            </tr>
+
+            {% for lead in leads %}
+            <tr>
+                <td>{{ lead.nama_orangtua | default("-") }}</td>
+                <td>{{ lead.nama_anak | default("-") }}</td>
+                <td>{{ lead.whatsapp | default("-") }}</td>
+                <td>{{ lead.status | default("-") }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+
     </div>
 </div>
 
-<!-- KPI -->
-<div class="cards">
-    <div class="card">Total<br><b>{{ total }}</b></div>
-    <div class="card">HOT<br><b>{{ leads | selectattr("status","equalto","HOT") | list | length }}</b></div>
-    <div class="card">WARM<br><b>{{ leads | selectattr("status","equalto","WARM") | list | length }}</b></div>
-    <div class="card">COLD<br><b>{{ leads | selectattr("status","equalto","COLD") | list | length }}</b></div>
-</div>
+<!-- SAFE DATA BRIDGE (JINJA → JS) -->
+<script>
+const dashboardData = {{ {
+    "hot": hot | default(0),
+    "warm": warm | default(0),
+    "cold": cold | default(0)
+} | tojson }};
+</script>
 
-<!-- FILTER -->
-<div class="toolbar">
-    <a href="/dashboard">ALL</a> |
-    <a href="/dashboard?status=COLD">COLD</a> |
-    <a href="/dashboard?status=WARM">WARM</a> |
-    <a href="/dashboard?status=HOT">HOT</a>
-</div>
+<!-- CHART LOGIC -->
+<script>
+window.addEventListener('load', function () {
 
-<!-- SEARCH -->
-<form method="get" action="/dashboard" class="toolbar">
-    <input type="text" name="q" placeholder="Cari nama / WA">
-    <button type="submit">Search</button>
-</form>
+    const canvas = document.getElementById('leadChart');
 
-<!-- TABLE -->
-<table>
-    <tr>
-        <th>Nama Ortu</th>
-        <th>Anak</th>
-        <th>Umur</th>
-        <th>WhatsApp</th>
-        <th>Status</th>
-        <th>Aksi</th>
-    </tr>
+    if (!canvas) return;
 
-    {% for lead in leads %}
-    <tr>
-        <td>{{ lead.nama_orangtua or "-" }}</td>
-        <td>{{ lead.nama_anak or "-" }}</td>
-        <td>{{ lead.umur_anak or "-" }}</td>
-        <td>{{ lead.whatsapp }}</td>
+    const ctx = canvas.getContext('2d');
 
-        <td>
-            {% if lead.status == "HOT" %}
-                <span class="badge hot">HOT</span>
-            {% elif lead.status == "WARM" %}
-                <span class="badge warm">WARM</span>
-            {% else %}
-                <span class="badge cold">COLD</span>
-            {% endif %}
-        </td>
+    const hot = dashboardData.hot || 0;
+    const warm = dashboardData.warm || 0;
+    const cold = dashboardData.cold || 0;
 
-        <td>
-            <a href="/update-status/{{ lead.id }}/COLD">COLD</a> |
-            <a href="/update-status/{{ lead.id }}/WARM">WARM</a> |
-            <a href="/update-status/{{ lead.id }}/HOT">HOT</a>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['COLD', 'WARM', 'HOT'],
+            datasets: [{
+                label: 'Leads',
+                data: [cold, warm, hot]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: true
+                }
+            }
+        }
+    });
 
-<!-- PAGINATION -->
-<div class="pagination">
-    {% if page > 1 %}
-        <a href="/dashboard?page={{ page - 1 }}">⬅ Prev</a>
-    {% endif %}
-
-    <span>Page {{ page }}</span>
-
-    <a href="/dashboard?page={{ page + 1 }}">Next ➡</a>
-</div>
+});
+</script>
 
 </body>
 </html>

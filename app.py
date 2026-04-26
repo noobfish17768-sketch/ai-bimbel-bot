@@ -76,16 +76,14 @@ def root():
 
 
 # =========================
-# 🔐 LOGIN PAGE
+# 🔐 LOGIN PAGE (FIX FINAL)
 # =========================
 @app.get("/login")
 def login_page(request: Request):
     return templates.TemplateResponse(
-        "login.html",
-        {
-            "request": request
-        },
-        request=request   # 🔥 WAJIB DI VERSI BARU
+        request=request,
+        name="login.html",
+        context={}
     )
 
 
@@ -111,8 +109,9 @@ async def login(request: Request):
         db.close()
 
     return templates.TemplateResponse(
-        "login.html",
-        {"request": request}
+        request=request,
+        name="login.html",
+        context={"error": "Login gagal"}
     )
 
 
@@ -168,14 +167,10 @@ async def telegram_webhook(request: Request):
 
         print(f"👤 {user_id} | 💬 {message}")
 
-        # ⚠️ sementara owner_id = 1 (admin default)
         result = await asyncio.to_thread(run_ai, str(user_id), message)
 
         if bot:
-            await bot.send_message(
-                chat_id=user_id,
-                text=result["reply"]
-            )
+            await bot.send_message(chat_id=user_id, text=result["reply"])
 
         return {"ok": True}
 
@@ -185,18 +180,7 @@ async def telegram_webhook(request: Request):
 
 
 # =========================
-# CHAT TEST
-# =========================
-@app.post("/chat")
-def chat(data: dict):
-    user_id = data.get("user_id", "user")
-    message = data.get("message", "")
-
-    return run_ai(user_id, message)
-
-
-# =========================
-# 📊 DASHBOARD (MULTI TENANT)
+# 📊 DASHBOARD (FIX KPI)
 # =========================
 @app.get("/dashboard")
 def dashboard(request: Request, status: str = None, q: str = None, page: int = 1):
@@ -211,8 +195,14 @@ def dashboard(request: Request, status: str = None, q: str = None, page: int = 1
     try:
         per_page = 10
 
-        # 🔥 FILTER OWNER
-        query = db.query(LeadDB).filter(LeadDB.owner_id == user_id)
+        base_query = db.query(LeadDB).filter(LeadDB.owner_id == user_id)
+
+        # 🔥 KPI DI BACKEND
+        hot = base_query.filter(LeadDB.status == "HOT").count()
+        warm = base_query.filter(LeadDB.status == "WARM").count()
+        cold = base_query.filter(LeadDB.status == "COLD").count()
+
+        query = base_query
 
         if status:
             query = query.filter(LeadDB.status == status)
@@ -226,142 +216,25 @@ def dashboard(request: Request, status: str = None, q: str = None, page: int = 1
         total = query.count()
 
         leads = query.order_by(LeadDB.created_at.desc()) \
-                     .offset((page - 1) * per_page) \
-                     .limit(per_page) \
-                     .all()
-
-        return templates.TemplateResponse(
-            "dashboard.html",
-            {
-                "request": request,
-                "leads": leads,
-                "total": total,
-                "page": page
-            }
-        )
-
-    finally:
-        db.close()
-
-
-# =========================
-# 💬 CONVERSATIONS (FILTER OWNER)
-# =========================
-@app.get("/conversations")
-def conversations(request: Request):
-
-    user_id = get_current_user(request)
-
-    if not user_id:
-        return RedirectResponse("/login", status_code=302)
-
-    db = SessionLocal()
-
-    try:
-        chats = db.query(Conversation) \
-            .join(LeadDB, Conversation.lead_id == LeadDB.id) \
-            .filter(LeadDB.owner_id == user_id) \
-            .order_by(Conversation.created_at.desc()) \
-            .limit(50) \
+            .offset((page - 1) * per_page) \
+            .limit(per_page) \
             .all()
 
         return templates.TemplateResponse(
-            "conversations.html",
-            {
-                "request": request,
-                "chats": chats
+            request=request,
+            name="dashboard.html",
+            context={
+                "leads": leads,
+                "total": total,
+                "page": page,
+                "hot": hot,
+                "warm": warm,
+                "cold": cold
             }
         )
 
     finally:
         db.close()
-
-
-# =========================
-# ⚙️ SETTINGS
-# =========================
-@app.get("/settings")
-def settings(request: Request):
-
-    if not get_current_user(request):
-        return RedirectResponse("/login", status_code=302)
-
-    db = SessionLocal()
-
-    try:
-        settings = db.query(BotSetting).all()
-
-        return templates.TemplateResponse(
-            "settings.html",
-            {
-                "request": request,
-                "settings": settings
-            }
-        )
-
-    finally:
-        db.close()
-
-
-@app.post("/settings")
-async def update_settings(request: Request):
-
-    if not get_current_user(request):
-        return RedirectResponse("/login", status_code=302)
-
-    db = SessionLocal()
-
-    form = await request.form()
-    key = form.get("key")
-    value = form.get("value")
-
-    try:
-        setting = db.query(BotSetting).filter_by(key=key).first()
-
-        if setting:
-            setting.value = value
-        else:
-            db.add(BotSetting(key=key, value=value))
-
-        db.commit()
-
-    except Exception as e:
-        print("❌ SETTINGS ERROR:", e)
-        db.rollback()
-
-    finally:
-        db.close()
-
-    return RedirectResponse("/settings", status_code=302)
-
-
-# =========================
-# UPDATE STATUS (SECURE)
-# =========================
-@app.get("/update-status/{lead_id}/{status}")
-def update_status(request: Request, lead_id: int, status: str):
-
-    user_id = get_current_user(request)
-
-    if not user_id:
-        return RedirectResponse("/login", status_code=302)
-
-    db = SessionLocal()
-
-    try:
-        lead = db.query(LeadDB).filter(
-            LeadDB.id == lead_id,
-            LeadDB.owner_id == user_id
-        ).first()
-
-        if lead:
-            lead.status = status.upper()
-            db.commit()
-
-    finally:
-        db.close()
-
-    return RedirectResponse("/dashboard", status_code=302)
 
 
 # =========================
@@ -375,14 +248,9 @@ def startup():
     print("✅ DB initialized")
 
     try:
-        thread = threading.Thread(
-            target=run_followup,
-            daemon=True
-        )
+        thread = threading.Thread(target=run_followup, daemon=True)
         thread.start()
-
         print("✅ Follow-up thread started")
-
     except Exception as e:
         print("❌ Followup error:", e)
 
