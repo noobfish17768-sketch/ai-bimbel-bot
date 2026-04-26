@@ -76,7 +76,7 @@ def root():
 
 
 # =========================
-# 🔐 LOGIN PAGE (FIX FINAL)
+# 🔐 LOGIN PAGE
 # =========================
 @app.get("/login")
 def login_page(request: Request):
@@ -180,7 +180,7 @@ async def telegram_webhook(request: Request):
 
 
 # =========================
-# 📊 DASHBOARD (FIX KPI)
+# 📊 DASHBOARD
 # =========================
 @app.get("/dashboard")
 def dashboard(request: Request, status: str = None, q: str = None, page: int = 1):
@@ -197,7 +197,6 @@ def dashboard(request: Request, status: str = None, q: str = None, page: int = 1
 
         base_query = db.query(LeadDB).filter(LeadDB.owner_id == user_id)
 
-        # 🔥 KPI DI BACKEND
         hot = base_query.filter(LeadDB.status == "HOT").count()
         warm = base_query.filter(LeadDB.status == "WARM").count()
         cold = base_query.filter(LeadDB.status == "COLD").count()
@@ -231,6 +230,60 @@ def dashboard(request: Request, status: str = None, q: str = None, page: int = 1
                 "warm": warm,
                 "cold": cold
             }
+        )
+
+    finally:
+        db.close()
+
+
+# =========================
+# 💬 CONVERSATIONS (NEW)
+# =========================
+@app.get("/conversations")
+def conversations(request: Request):
+    user_id = get_current_user(request)
+
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
+
+    db = SessionLocal()
+
+    try:
+        chats = db.query(Conversation).filter(
+            Conversation.user_id == user_id
+        ).order_by(Conversation.created_at.desc()).all()
+
+        return templates.TemplateResponse(
+            request=request,
+            name="conversations.html",
+            context={"chats": chats}
+        )
+
+    finally:
+        db.close()
+
+
+# =========================
+# ⚙️ SETTINGS (NEW)
+# =========================
+@app.get("/settings")
+def settings(request: Request):
+    user_id = get_current_user(request)
+
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
+
+    db = SessionLocal()
+
+    try:
+        settings = db.query(BotSetting).filter(
+            BotSetting.user_id == user_id
+        ).first()
+
+        return templates.TemplateResponse(
+            request=request,
+            name="settings.html",
+            context={"settings": settings}
         )
 
     finally:
