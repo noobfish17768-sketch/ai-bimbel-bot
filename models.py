@@ -104,7 +104,7 @@ class Conversation(Base):
 
     id = Column(Integer, primary_key=True)
 
-    user_id = Column(String, index=True)  # telegram user id
+    user_id = Column(Integer, index=True)  # telegram user id
 
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
 
@@ -127,7 +127,7 @@ class BotSetting(Base):
     __tablename__ = "bot_settings"
 
     id = Column(Integer, primary_key=True)
-
+    user_id = Column(Integer, index=True)  # telegram user id
     key = Column(String, unique=True)
     value = Column(String)
 
