@@ -77,7 +77,7 @@ def root():
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
-    return FileResponse("favicon.ico")
+    return FileResponse("static/favicon.ico")
 
 
 # =========================
@@ -269,6 +269,58 @@ def conversations(request: Request):
 
     finally:
         db.close()
+
+
+# =========================
+# DAFTAR USER
+# =========================
+@app.get("/inbox")
+def inbox(request: Request):
+    user_id = str(get_current_user(request))
+    db = SessionLocal()
+
+    users = db.query(Conversation.external_id)\
+        .filter(Conversation.user_id == user_id)\
+        .distinct()\
+        .all()
+
+    db.close()
+
+    return templates.TemplateResponse(
+        "inbox.html",
+        {
+            "request": request,
+            "users": [u[0] for u in users]
+        }
+    )
+
+
+# =========================
+# DETAIL CHAT PER USER
+# =========================
+@app.get("/chat/{external_id}")
+def chat_detail(request: Request, external_id: str):
+    user_id = str(get_current_user(request))
+    db = SessionLocal()
+
+    chats = db.query(Conversation)\
+        .filter(
+            Conversation.user_id == user_id,
+            Conversation.external_id == external_id
+        )\
+        .order_by(Conversation.created_at.asc())\
+        .all()
+
+    db.close()
+
+    return templates.TemplateResponse(
+        "chat.html",
+        {
+            "request": request,
+            "chats": chats,
+            "external_id": external_id
+        }
+    )
 
 
 # =========================
