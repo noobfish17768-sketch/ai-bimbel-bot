@@ -1,12 +1,11 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
-from database import Base
-
+from database import Base  # ❗ PAKAI INI SAJA (hapus declarative_base)
 
 # =========================
-# 👤 USER (ADMIN / SAAS USER)
+# 👤 USER
 # =========================
 class User(Base):
     __tablename__ = "users"
@@ -15,11 +14,12 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     password = Column(String, nullable=False)
 
-    role = Column(String, default="admin")  # superadmin / admin / staff
+    role = Column(String, default="admin")
+
+    bot_active = Column(Boolean, default=True)  # 🔥 TAMBAH INI
 
     created_at = Column(DateTime, server_default=func.now())
 
-    # 🔗 RELATION
     leads = relationship(
         "LeadDB",
         back_populates="owner",
@@ -32,22 +32,16 @@ class User(Base):
         foreign_keys="LeadDB.assigned_to"
     )
 
-    def __repr__(self):
-        return f"<User {self.username} | {self.role}>"
-
 
 # =========================
-# 📇 LEADS (MULTI TENANT + CRM)
+# 📇 LEADS
 # =========================
 class LeadDB(Base):
     __tablename__ = "leads"
 
     id = Column(Integer, primary_key=True)
 
-    # 🔥 MULTI TENANT (WAJIB)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-
-    # 🔥 ASSIGN KE STAFF
     assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     telegram_id = Column(String, unique=True, index=True)
@@ -60,10 +54,8 @@ class LeadDB(Base):
 
     status = Column(String, default="COLD")
 
-    # 🧠 CRM
     notes = Column(Text)
 
-    # 📊 TRACKING
     created_at = Column(DateTime, server_default=func.now())
     last_chat = Column(DateTime, server_default=func.now())
 
@@ -73,13 +65,11 @@ class LeadDB(Base):
     next_followup = Column(DateTime)
 
     followup_count = Column(Integer, default=0)
-
     lead_score = Column(Integer, default=0)
 
     converted = Column(Integer, default=0)
     response_count = Column(Integer, default=0)
 
-    # 🔗 RELATION
     owner = relationship(
         "User",
         foreign_keys=[owner_id],
@@ -92,9 +82,6 @@ class LeadDB(Base):
         cascade="all, delete-orphan"
     )
 
-    def __repr__(self):
-        return f"<Lead {self.whatsapp} | {self.status}>"
-
 
 # =========================
 # 💬 CONVERSATIONS
@@ -104,7 +91,7 @@ class Conversation(Base):
 
     id = Column(Integer, primary_key=True)
 
-    user_id = Column(String, index=True)  # telegram user id
+    user_id = Column(String, index=True)
     external_id = Column(String, index=True)
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
 
@@ -113,11 +100,7 @@ class Conversation(Base):
 
     created_at = Column(DateTime, server_default=func.now())
 
-    # 🔗 RELATION
     lead = relationship("LeadDB", back_populates="conversations")
-
-    def __repr__(self):
-        return f"<Chat {self.user_id}>"
 
 
 # =========================
@@ -127,11 +110,11 @@ class BotSetting(Base):
     __tablename__ = "bot_settings"
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(String, index=True)  # telegram user id
-    key = Column(String, unique=True)
+
+    user_id = Column(String, index=True)
+    bot_active = Column(Boolean, default=True)
+
+    key = Column(String)
     value = Column(String)
 
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-
-    def __repr__(self):
-        return f"<Setting {self.key}={self.value}>"

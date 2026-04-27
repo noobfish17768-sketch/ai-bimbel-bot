@@ -6,18 +6,22 @@ import threading
 
 from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 
 from starlette.middleware.sessions import SessionMiddleware
 
 from passlib.context import CryptContext
-
 from telegram import Bot
+
+from pydantic import BaseModel
 
 from database import engine, Base, SessionLocal
 from models import LeadDB, Conversation, BotSetting, User
+
+from cache import redis_client
+from bot_engine import handle_message
+
 from ai_service import run_ai
 from followup import run_followup
 
@@ -31,75 +35,60 @@ app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="super-secret-key")
 
 # =========================
-# STATIC FILES
+# STATIC
 # =========================
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 templates = Jinja2Templates(directory="templates")
 
 # =========================
-# PASSWORD HASH
+# PASSWORD
 # =========================
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def verify_password(plain, hashed):
     return pwd_context.verify(plain, hashed)
 
-
 def hash_password(password):
     return pwd_context.hash(password)
-
 
 def get_current_user(request: Request):
     return request.session.get("user_id")
 
-
 # =========================
-# TELEGRAM BOT INIT
+# TELEGRAM BOT
 # =========================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-if not TELEGRAM_TOKEN:
-    print("❌ TELEGRAM TOKEN TIDAK ADA!")
-    bot = None
-else:
+if TELEGRAM_TOKEN:
     bot = Bot(token=TELEGRAM_TOKEN)
     print("✅ Bot Telegram Ready")
-
+else:
+    bot = None
+    print("❌ TELEGRAM TOKEN NOT FOUND")
 
 # =========================
 # ROOT
 # =========================
 @app.get("/")
 def root():
-    return {"status": "hidup 🚀"}
+    return {"status": "alive 🚀"}
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return FileResponse("static/favicon.ico")
 
-
 # =========================
-# 🔐 LOGIN PAGE
+# LOGIN
 # =========================
 @app.get("/login")
 def login_page(request: Request):
-    return templates.TemplateResponse(
-        request=request,
-        name="login.html",
-        context={}
-    )
+    return templates.TemplateResponse("login.html", {"request": request})
 
-
-# =========================
-# 🔐 LOGIN PROCESS
-# =========================
 @app.post("/login")
 async def login(request: Request):
     db = SessionLocal()
-
     form = await request.form()
+
     username = form.get("username")
     password = form.get("password")
 
@@ -114,23 +103,20 @@ async def login(request: Request):
         db.close()
 
     return templates.TemplateResponse(
-        request=request,
-        name="login.html",
-        context={"error": "Login gagal"}
+        "login.html",
+        {"request": request, "error": "Login gagal"}
     )
 
-
 # =========================
-# 🔐 LOGOUT
+# LOGOUT
 # =========================
 @app.get("/logout")
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/login", status_code=302)
 
-
 # =========================
-# 👤 CREATE ADMIN
+# CREATE ADMIN
 # =========================
 @app.get("/create-admin")
 def create_admin():
@@ -150,11 +136,10 @@ def create_admin():
         db.add(user)
         db.commit()
 
-        return {"msg": "Admin berhasil dibuat"}
+        return {"msg": "Admin created"}
 
     finally:
         db.close()
-
 
 # =========================
 # TELEGRAM WEBHOOK
@@ -170,9 +155,10 @@ async def telegram_webhook(request: Request):
         message = data["message"].get("text", "")
         user_id = data["message"]["chat"]["id"]
 
-        print(f"👤 {user_id} | 💬 {message}")
+        result = await handle_message(str(user_id), message)
 
-        result = await asyncio.to_thread(run_ai, str(user_id), message)
+        if result and bot:
+            await bot.send_message(chat_id=user_id, text=result["reply"])
 
         if bot:
             await bot.send_message(chat_id=user_id, text=result["reply"])
@@ -183,9 +169,8 @@ async def telegram_webhook(request: Request):
         print("❌ WEBHOOK ERROR:", e)
         return {"ok": True}
 
-
 # =========================
-# 📊 DASHBOARD
+# DASHBOARD
 # =========================
 @app.get("/dashboard")
 def dashboard(request: Request, status: str = None, q: str = None, page: int = 1):
@@ -194,6 +179,8 @@ def dashboard(request: Request, status: str = None, q: str = None, page: int = 1
 
     if not user_id:
         return RedirectResponse("/login", status_code=302)
+
+    user_id = int(user_id)
 
     db = SessionLocal()
 
@@ -225,9 +212,9 @@ def dashboard(request: Request, status: str = None, q: str = None, page: int = 1
             .all()
 
         return templates.TemplateResponse(
-            request=request,
-            name="dashboard.html",
-            context={
+            "dashboard.html",
+            {
+                "request": request,
                 "leads": leads,
                 "total": total,
                 "page": page,
@@ -240,102 +227,19 @@ def dashboard(request: Request, status: str = None, q: str = None, page: int = 1
     finally:
         db.close()
 
-
 # =========================
-# 💬 CONVERSATIONS (NEW)
-# =========================
-@app.get("/conversations")
-def conversations(request: Request):
-    print("🚀 conversations set")
-    user_id = get_current_user(request)
-
-    if not user_id:
-        return RedirectResponse("/login", status_code=302)
-
-    user_id = str(user_id)
-
-    db = SessionLocal()
-
-    try:
-        chats = db.query(Conversation).filter(
-            Conversation.user_id == user_id
-        ).order_by(Conversation.created_at.desc()).all()
-
-        return templates.TemplateResponse(
-            request=request,
-            name="conversations.html",
-            context={"chats": chats}
-        )
-
-    finally:
-        db.close()
-
-
-# =========================
-# DAFTAR USER
-# =========================
-@app.get("/inbox")
-def inbox(request: Request):
-    user_id = str(get_current_user(request))
-    db = SessionLocal()
-
-    users = db.query(Conversation.external_id)\
-        .filter(Conversation.user_id == user_id)\
-        .distinct()\
-        .all()
-
-    db.close()
-
-    return templates.TemplateResponse(
-        "inbox.html",
-        {
-            "request": request,
-            "users": [u[0] for u in users]
-        }
-    )
-
-
-# =========================
-# DETAIL CHAT PER USER
-# =========================
-@app.get("/chat/{external_id}")
-def chat_detail(request: Request, external_id: str):
-    user_id = str(get_current_user(request))
-    db = SessionLocal()
-
-    chats = db.query(Conversation)\
-        .filter(
-            Conversation.user_id == user_id,
-            Conversation.external_id == external_id
-        )\
-        .order_by(Conversation.created_at.asc())\
-        .all()
-
-    db.close()
-
-    return templates.TemplateResponse(
-        "chat.html",
-        {
-            "request": request,
-            "chats": chats,
-            "external_id": external_id
-        }
-    )
-
-
-# =========================
-# ⚙️ SETTINGS (NEW)
+# SETTINGS PAGE
 # =========================
 @app.get("/settings")
 def settings(request: Request):
-    print("🚀 setting set")
+
     user_id = get_current_user(request)
 
     if not user_id:
         return RedirectResponse("/login", status_code=302)
 
     user_id = str(user_id)
-    
+
     db = SessionLocal()
 
     try:
@@ -344,14 +248,40 @@ def settings(request: Request):
         ).all()
 
         return templates.TemplateResponse(
-            request=request,
-            name="settings.html",
-            context={"settings": settings}
+            "settings.html",
+            {"request": request, "settings": settings}
         )
 
     finally:
         db.close()
 
+# =========================
+# TOGGLE BOT (FIXED + SAFE)
+# =========================
+class ToggleRequest(BaseModel):
+    user_id: int
+    status: bool
+
+@app.post("/toggle-bot")
+def toggle_bot(data: ToggleRequest):
+    db = SessionLocal()
+
+    try:
+        user = db.query(User).filter(User.id == data.user_id).first()
+
+        if not user:
+            return {"error": "User not found"}
+
+        user.bot_active = data.status
+        db.commit()
+
+        # 🔥 CACHE UPDATE (FAST ACCESS)
+        redis_client.set(f"bot:{data.user_id}", str(data.status))
+
+        return {"success": True, "bot_active": data.status}
+
+    finally:
+        db.close()
 
 # =========================
 # STARTUP
@@ -361,14 +291,11 @@ def startup():
     print("🚀 STARTUP INIT")
 
     Base.metadata.create_all(bind=engine)
-    print("✅ DB initialized")
+    print("✅ DB ready")
 
-    try:
-        thread = threading.Thread(target=run_followup, daemon=True)
-        thread.start()
-        print("✅ Follow-up thread started")
-    except Exception as e:
-        print("❌ Followup error:", e)
+    thread = threading.Thread(target=run_followup, daemon=True)
+    thread.start()
 
+    print("✅ Followup thread running")
 
 print("✅ APP READY")
