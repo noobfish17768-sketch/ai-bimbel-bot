@@ -265,7 +265,8 @@ LEAD_SCORE: {prev_score}
         # SAVE CONVERSATION (🔥 FIX)
         # =========================
         chat = Conversation(
-            user_id=str(owner_id),   # ✅ INI FIX UTAMA
+            user_id=str(owner_id),   # dashboard user
+            external_id=user_id,     # 🔥 Telegram ID
             message=message,
             response=reply,
             lead_id=user.id,

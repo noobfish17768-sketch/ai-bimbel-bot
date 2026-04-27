@@ -105,7 +105,7 @@ class Conversation(Base):
     id = Column(Integer, primary_key=True)
 
     user_id = Column(String, index=True)  # telegram user id
-
+    external_id = Column(String, index=True)
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
 
     message = Column(Text)
