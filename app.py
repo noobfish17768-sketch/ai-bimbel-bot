@@ -246,10 +246,13 @@ def dashboard(request: Request, status: str = None, q: str = None, page: int = 1
 # =========================
 @app.get("/conversations")
 def conversations(request: Request):
-    user_id = str(get_current_user(request))
+    print("🚀 conversations set")
+    user_id = get_current_user(request)
 
     if not user_id:
         return RedirectResponse("/login", status_code=302)
+
+    user_id = str(user_id)
 
     db = SessionLocal()
 
@@ -273,17 +276,20 @@ def conversations(request: Request):
 # =========================
 @app.get("/settings")
 def settings(request: Request):
+    print("🚀 setting set")
     user_id = get_current_user(request)
 
     if not user_id:
         return RedirectResponse("/login", status_code=302)
 
+    user_id = str(user_id)
+    
     db = SessionLocal()
 
     try:
         settings = db.query(BotSetting).filter(
             BotSetting.user_id == user_id
-        ).first()
+        ).all()
 
         return templates.TemplateResponse(
             request=request,
