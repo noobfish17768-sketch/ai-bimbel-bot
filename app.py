@@ -246,7 +246,7 @@ def dashboard(request: Request, status: str = None, q: str = None, page: int = 1
 # =========================
 @app.get("/conversations")
 def conversations(request: Request):
-    user_id = get_current_user(request)
+    user_id = str(get_current_user(request))
 
     if not user_id:
         return RedirectResponse("/login", status_code=302)
