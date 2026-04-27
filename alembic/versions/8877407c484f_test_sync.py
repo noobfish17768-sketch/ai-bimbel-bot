@@ -42,10 +42,14 @@ def upgrade() -> None:
                existing_type=sa.TEXT(),
                type_=sa.String(),
                existing_nullable=True)
-    op.alter_column('conversations', 'lead_id',
-               existing_type=sa.TEXT(),
-               type_=sa.Integer(),
-               existing_nullable=True)
+    op.alter_column(
+                'conversations',
+                'lead_id',
+                existing_type=sa.TEXT(),
+                type_=sa.Integer(),
+                existing_nullable=True,
+                postgresql_using='lead_id::integer'
+            )
     op.drop_index(op.f('idx_conversations_external_id'), table_name='conversations')
     op.create_index(op.f('ix_conversations_external_id'), 'conversations', ['external_id'], unique=False)
     op.create_index(op.f('ix_conversations_user_id'), 'conversations', ['user_id'], unique=False)
