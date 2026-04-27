@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -73,6 +74,10 @@ else:
 @app.get("/")
 def root():
     return {"status": "hidup 🚀"}
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse("favicon.ico")
 
 
 # =========================
