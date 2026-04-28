@@ -3,35 +3,38 @@
 <head>
     <title>Inbox</title>
     <style>
-        body { margin:0; font-family: Arial; display:flex; }
+        body { margin:0; display:flex; font-family:Arial; }
+
         .sidebar {
-            width: 300px;
-            background: #111;
-            color: white;
-            height: 100vh;
-            overflow-y: auto;
+            width:300px;
+            background:#111;
+            color:white;
+            height:100vh;
+            overflow:auto;
         }
+
         .user {
-            padding: 15px;
-            border-bottom: 1px solid #333;
-            cursor: pointer;
+            padding:15px;
+            border-bottom:1px solid #333;
+            cursor:pointer;
         }
-        .user:hover {
-            background: #222;
-        }
-        .chat-area {
+
+        .user:hover { background:#222; }
+
+        .main {
             flex:1;
             display:flex;
-            align-items:center;
             justify-content:center;
-            color: gray;
+            align-items:center;
+            color:gray;
         }
     </style>
 </head>
+
 <body>
 
 <div class="sidebar">
-    <h3 style="padding:15px;">💬 Inbox</h3>
+    <h3 style="padding:15px;">Inbox</h3>
 
     {% for u in users %}
     <div class="user" onclick="window.location='/chat/{{u}}'">
@@ -40,8 +43,8 @@
     {% endfor %}
 </div>
 
-<div class="chat-area">
-    Pilih chat di kiri
+<div class="main">
+    Pilih chat
 </div>
 
 </body>

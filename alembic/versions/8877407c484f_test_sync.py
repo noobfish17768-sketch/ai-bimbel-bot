@@ -33,6 +33,10 @@ def upgrade() -> None:
                existing_type=sa.TEXT(),
                type_=sa.String(),
                existing_nullable=True)
+    op.add_column(
+        'bot_settings',
+        sa.Column('bot_active', sa.Boolean(), server_default='true')
+    )
     op.create_index(op.f('ix_bot_settings_user_id'), 'bot_settings', ['user_id'], unique=False)
     op.alter_column('conversations', 'user_id',
                existing_type=sa.TEXT(),

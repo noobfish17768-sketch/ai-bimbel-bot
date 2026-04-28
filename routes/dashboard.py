@@ -1,0 +1,63 @@
+from fastapi import APIRouter, Request, Depends
+from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
+
+from database.models import LeadDB, User
+from core.dependencies import get_db
+from core.security import get_current_user
+
+router = APIRouter()
+templates = Jinja2Templates(directory="templates")
+
+
+@router.get("/dashboard")
+def dashboard(request: Request, status: str = None, q: str = None, page: int = 1, db=Depends(get_db)):
+
+    user_id = get_current_user(request)
+
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
+
+    user = db.query(User).filter(User.id == int(user_id)).first()
+
+    if not user:
+        request.session.clear()
+        return RedirectResponse("/login", status_code=302)
+
+    per_page = 10
+
+    base = db.query(LeadDB).filter(LeadDB.owner_id == user.id)
+
+    hot = base.filter(LeadDB.status == "HOT").count()
+    warm = base.filter(LeadDB.status == "WARM").count()
+    cold = base.filter(LeadDB.status == "COLD").count()
+
+    query = base
+
+    if status:
+        query = query.filter(LeadDB.status == status)
+
+    if q:
+        query = query.filter(
+            LeadDB.nama_orangtua.ilike(f"%{q}%") |
+            LeadDB.whatsapp.ilike(f"%{q}%")
+        )
+
+    leads = query.order_by(LeadDB.created_at.desc()) \
+        .offset((page - 1) * per_page) \
+        .limit(per_page) \
+        .all()
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "leads": leads,
+            "hot": hot,
+            "warm": warm,
+            "cold": cold,
+            "total": query.count(),
+            "user_id": user.id,
+            "bot_active": user.bot_active
+        }
+    )

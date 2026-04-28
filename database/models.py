@@ -2,7 +2,8 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Bool
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
-from database import Base  # ❗ PAKAI INI SAJA (hapus declarative_base)
+from database.database import Base
+
 
 # =========================
 # 👤 USER
@@ -16,10 +17,12 @@ class User(Base):
 
     role = Column(String, default="admin")
 
-    bot_active = Column(Boolean, default=True)  # 🔥 TAMBAH INI
+    # 🔥 SINGLE SOURCE OF TRUTH
+    bot_active = Column(Boolean, default=True)
 
     created_at = Column(DateTime, server_default=func.now())
 
+    # relasi ke leads
     leads = relationship(
         "LeadDB",
         back_populates="owner",
@@ -27,6 +30,7 @@ class User(Base):
         cascade="all, delete"
     )
 
+    # relasi assigned leads (optional future CRM)
     assigned_leads = relationship(
         "LeadDB",
         foreign_keys="LeadDB.assigned_to"
@@ -70,12 +74,14 @@ class LeadDB(Base):
     converted = Column(Integer, default=0)
     response_count = Column(Integer, default=0)
 
+    # relasi owner
     owner = relationship(
         "User",
         foreign_keys=[owner_id],
         back_populates="leads"
     )
 
+    # relasi chat
     conversations = relationship(
         "Conversation",
         back_populates="lead",
@@ -91,8 +97,9 @@ class Conversation(Base):
 
     id = Column(Integer, primary_key=True)
 
-    user_id = Column(String, index=True)
-    external_id = Column(String, index=True)
+    user_id = Column(String, index=True)      # owner dashboard
+    external_id = Column(String, index=True)  # telegram user
+
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
 
     message = Column(Text)
@@ -104,7 +111,7 @@ class Conversation(Base):
 
 
 # =========================
-# ⚙️ BOT SETTINGS
+# ⚙️ BOT SETTINGS (CONFIG ONLY)
 # =========================
 class BotSetting(Base):
     __tablename__ = "bot_settings"
@@ -112,9 +119,9 @@ class BotSetting(Base):
     id = Column(Integer, primary_key=True)
 
     user_id = Column(String, index=True)
-    bot_active = Column(Boolean, default=True)
 
-    key = Column(String)
+    # 🔥 hanya config, bukan status bot
+    key = Column(String, index=True)
     value = Column(String)
 
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

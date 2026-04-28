@@ -1,12 +1,13 @@
 import time
 from datetime import datetime, timedelta
-from database import SessionLocal
-from models import LeadDB
+
+from database.database import SessionLocal
+from database.models import LeadDB
 from telegram import Bot
 import os
 
 # =========================
-# SAFE BOT INIT
+# TELEGRAM INIT SAFE
 # =========================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 bot = Bot(token=TELEGRAM_TOKEN) if TELEGRAM_TOKEN else None
@@ -15,19 +16,18 @@ bot = Bot(token=TELEGRAM_TOKEN) if TELEGRAM_TOKEN else None
 # =========================
 # DELAY RULE
 # =========================
-def get_delay(score):
+def get_delay(score: int) -> int:
     if score < 30:
-        return 360
+        return 360   # 6 jam
     elif score < 60:
-        return 120
+        return 120   # 2 jam
     elif score < 85:
-        return 45
-    else:
-        return 15
+        return 45    # 45 menit
+    return 15       # HOT
 
 
 # =========================
-# MESSAGE GENERATOR
+# MESSAGE TEMPLATE
 # =========================
 def generate_followup(lead):
     nama = lead.nama_orangtua or "kak"
@@ -36,24 +36,24 @@ def generate_followup(lead):
     if score > 85:
         return f"""Kak {nama}, aku bantu ringkas ya 😊
 
-Biasanya orang tua ambil karena anak jadi lebih cepat lancar baca
+Banyak orang tua ambil program ini karena anak jadi lebih cepat lancar membaca.
 
-Kalau kakak sudah cocok, aku bisa bantu proses daftarnya sekarang"""
+Kalau kakak mau, aku bisa bantu proses daftarnya sekarang."""
 
     if score > 60:
         return f"""Kak {nama}, biasanya orang tua mulai dari trial dulu 😊
 
-Dari situ bisa lihat perkembangan anaknya langsung
+Dari situ bisa lihat perkembangan anaknya langsung.
 
-Mau aku bantu cek jadwal trial yang tersedia?"""
+Mau aku cek jadwal trial yang tersedia?"""
 
     if score > 30:
-        return f"""Kak {nama}, program ini fokus bantu anak:
+        return f"""Kak {nama}, program ini bantu anak:
 
 • Lebih cepat membaca  
 • Lebih percaya diri  
 
-Biasanya perubahan sudah mulai terlihat dalam beberapa pertemuan 😊"""
+Biasanya sudah terlihat hasilnya dalam beberapa pertemuan 😊"""
 
     return f"""Kak {nama}, tadi sempat tanya ya 😊
 
@@ -61,35 +61,32 @@ Kalau boleh tahu, anaknya sekarang lagi belajar membaca atau menulis?"""
 
 
 # =========================
-# FOLLOWUP CHECK
+# CHECK ELIGIBILITY
 # =========================
-def should_followup(lead):
+def should_followup(lead) -> bool:
     if not lead.last_chat:
         return False
 
     now = datetime.utcnow()
-    delay = get_delay(lead.lead_score or 0)
-
     last_time = lead.last_followup or lead.last_chat
 
-    return now - last_time > timedelta(minutes=delay)
+    delay = get_delay(lead.lead_score or 0)
+
+    return (now - last_time) > timedelta(minutes=delay)
 
 
-# =========================
-# ANTI SPAM LIMIT
-# =========================
-def can_send_again(lead):
+def can_send(lead) -> bool:
     return (lead.followup_count or 0) < 3
 
 
 # =========================
-# MAIN LOOP (FIXED)
+# MAIN WORKER LOOP
 # =========================
 def run_followup():
-    print("🚀 AI FOLLOWUP SYSTEM START")
+    print("🚀 FOLLOWUP SYSTEM STARTED")
 
     if not bot:
-        print("❌ TELEGRAM BOT NOT INITIALIZED")
+        print("❌ TELEGRAM TOKEN NOT FOUND")
         return
 
     while True:
@@ -106,18 +103,18 @@ def run_followup():
                     if not lead.telegram_id:
                         continue
 
-                    if not can_send_again(lead):
+                    if not can_send(lead):
                         continue
 
                     if not should_followup(lead):
                         continue
 
                     # =========================
-                    # SEND MESSAGE
+                    # MESSAGE
                     # =========================
                     msg = generate_followup(lead)
 
-                    print(f"📤 FOLLOWUP KE {lead.telegram_id} | SCORE: {lead.lead_score}")
+                    print(f"📤 SEND FOLLOWUP -> {lead.telegram_id} | SCORE {lead.lead_score}")
 
                     bot.send_message(
                         chat_id=lead.telegram_id,
@@ -125,7 +122,7 @@ def run_followup():
                     )
 
                     # =========================
-                    # SAFE DB UPDATE
+                    # UPDATE SAFE
                     # =========================
                     lead.followup_count = (lead.followup_count or 0) + 1
                     lead.last_followup = datetime.utcnow()
@@ -133,11 +130,11 @@ def run_followup():
                     db.commit()
 
                 except Exception as e:
-                    print(f"❌ ERROR PER LEAD {lead.id}: {e}")
+                    print(f"❌ ERROR LEAD {lead.id}: {e}")
                     db.rollback()
 
         except Exception as e:
-            print("❌ FATAL FOLLOWUP ERROR:", e)
+            print("❌ FOLLOWUP LOOP ERROR:", e)
 
         finally:
             db.close()

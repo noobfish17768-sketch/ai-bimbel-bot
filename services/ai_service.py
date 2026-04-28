@@ -1,20 +1,19 @@
 import json
 import os
 from openai import OpenAI
-from database import SessionLocal
-from models import LeadDB, Conversation, BotSetting
+from database.database import SessionLocal
+from database.models import LeadDB, Conversation, BotSetting, User
 from dotenv import load_dotenv
 from datetime import datetime
 
 load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
 MAX_HISTORY = 6
 
 
 # =========================
-# ⚙️ BOT SETTING
+# BOT SETTING (OPTIONAL)
 # =========================
 def get_setting(key, default=None):
     db = SessionLocal()
@@ -26,7 +25,7 @@ def get_setting(key, default=None):
 
 
 # =========================
-# SYSTEM PROMPT (TIDAK DIUBAH)
+# SYSTEM PROMPT (DO NOT CHANGE)
 # =========================
 SYSTEM_PROMPT = """
 Kamu adalah CS + Sales profesional untuk bimbel anak.
@@ -74,7 +73,6 @@ OUTPUT JSON:
 }
 """
 
-
 # =========================
 # HISTORY
 # =========================
@@ -88,31 +86,29 @@ def load_history(user):
 
 
 def save_history(user, history):
-    if user:
-        user.chat_history = json.dumps(history[-MAX_HISTORY:])
-        user.response_count = (user.response_count or 0) + 1
+    if not user:
+        return
+    user.chat_history = json.dumps(history[-MAX_HISTORY:])
+    user.response_count = (user.response_count or 0) + 1
 
 
 # =========================
-# SAFE JSON
+# SAFE JSON PARSER
 # =========================
-def safe_parse(ai_text):
+def safe_parse(text):
     try:
-        return json.loads(ai_text)
+        return json.loads(text)
     except:
-        start = ai_text.find("{")
-        end = ai_text.rfind("}") + 1
-        if start != -1 and end != -1:
-            try:
-                return json.loads(ai_text[start:end])
-            except:
-                pass
-
-    return {
-        "reply": ai_text,
-        "lead": {},
-        "status": "COLD"
-    }
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        try:
+            return json.loads(text[start:end])
+        except:
+            return {
+                "reply": text,
+                "lead": {},
+                "status": "COLD"
+            }
 
 
 # =========================
@@ -121,40 +117,34 @@ def safe_parse(ai_text):
 def format_reply(text):
     if not text:
         return ""
-    lines = text.strip().split("\n")
-    return "\n".join([l.strip() for l in lines])
+    return "\n".join([l.strip() for l in text.split("\n")])
 
 
 # =========================
-# STATUS
+# STATUS DETECTION
 # =========================
-def detect_status(message, current_status):
+def detect_status(message, current):
     msg = message.lower()
 
     if any(x in msg for x in ["daftar", "join", "ikut"]):
         return "HOT"
-
     if any(x in msg for x in ["harga", "jadwal", "info", "berapa"]):
         return "WARM"
-
-    return current_status
+    return current
 
 
 # =========================
 # SCORE
 # =========================
-def calculate_score(message, status, prev_score):
-    score = prev_score or 0
+def calculate_score(message, status, prev):
+    score = prev or 0
     msg = message.lower()
 
     score += 5
-
     if status == "WARM":
         score += 15
-
     if status == "HOT":
         score += 30
-
     if any(x in msg for x in ["daftar", "mau", "join"]):
         score += 20
 
@@ -162,19 +152,9 @@ def calculate_score(message, status, prev_score):
 
 
 # =========================
-# MAIN AI (🔥 FIXED)
+# MAIN AI
 # =========================
 def run_ai(user_id: str, message: str, owner_id: int = 1):
-
-    # 🔥 BOT CONTROL
-    bot_status = get_setting("bot_status", "ON")
-
-    if bot_status == "OFF":
-        return {
-            "reply": "Admin sedang mematikan bot 🙏",
-            "lead": {},
-            "status": "COLD"
-        }
 
     db = SessionLocal()
 
@@ -182,36 +162,36 @@ def run_ai(user_id: str, message: str, owner_id: int = 1):
         user_id = str(user_id)
 
         # =========================
+        # BOT CONTROL (FIXED SAFE)
+        # =========================
+        owner = db.query(User).filter(User.id == owner_id).first()
+        if owner and not owner.bot_active:
+            return {
+                "reply": "Admin sedang mematikan bot 🙏",
+                "lead": {},
+                "status": "COLD"
+            }
+
+        # =========================
         # GET LEAD
         # =========================
-        user = db.query(LeadDB).filter(
+        lead = db.query(LeadDB).filter(
             LeadDB.whatsapp == user_id
         ).first()
 
-        history = load_history(user)
+        history = load_history(lead)
 
-        nama = user.nama_orangtua if user else ""
-        current_status = user.status if user else "COLD"
-        prev_score = user.lead_score if user else 0
+        nama = lead.nama_orangtua if lead else ""
+        current_status = lead.status if lead else "COLD"
+        prev_score = lead.lead_score if lead else 0
 
-        # =========================
-        # USER MESSAGE
-        # =========================
-        history.append({
-            "role": "user",
-            "content": message
-        })
+        history.append({"role": "user", "content": message})
 
-        # =========================
-        # CONTEXT
-        # =========================
         system_context = SYSTEM_PROMPT + f"""
-
 KONDISI: {'CHAT_PERTAMA' if len(history) == 1 else 'LANJUTAN'}
 NAMA_USER: {nama}
 STATUS_LEAD: {current_status}
 JUMLAH_CHAT: {len(history)}
-LAST_ACTIVITY: {user.last_chat if user else "NONE"}
 LEAD_SCORE: {prev_score}
 """
 
@@ -244,46 +224,37 @@ LEAD_SCORE: {prev_score}
         reply = format_reply(data.get("reply", ""))
 
         # =========================
-        # UPDATE / CREATE LEAD
+        # UPDATE LEAD
         # =========================
-        if user:
-            user.status = new_status
-            user.lead_score = score
-            user.last_chat = datetime.utcnow()
+        if lead:
+            lead.status = new_status
+            lead.lead_score = score
+            lead.last_chat = datetime.utcnow()
         else:
-            user = LeadDB(
+            lead = LeadDB(
                 whatsapp=user_id,
                 status=new_status,
                 lead_score=score,
                 last_chat=datetime.utcnow(),
                 owner_id=owner_id
             )
-            db.add(user)
+            db.add(lead)
             db.flush()
 
         # =========================
-        # SAVE CONVERSATION (🔥 FIX)
+        # SAVE CHAT
         # =========================
-        chat = Conversation(
-            user_id=str(owner_id),   # dashboard user
-            external_id=user_id,     # 🔥 Telegram ID
+        db.add(Conversation(
+            user_id=str(owner_id),
+            external_id=user_id,
             message=message,
             response=reply,
-            lead_id=user.id,
+            lead_id=lead.id,
             created_at=datetime.utcnow()
-        )
+        ))
 
-        db.add(chat)
-
-        # =========================
-        # SAVE HISTORY
-        # =========================
-        history.append({
-            "role": "assistant",
-            "content": reply
-        })
-
-        save_history(user, history)
+        history.append({"role": "assistant", "content": reply})
+        save_history(lead, history)
 
         db.commit()
 
@@ -295,11 +266,9 @@ LEAD_SCORE: {prev_score}
 
     except Exception as e:
         db.rollback()
-        print("❌ RUN_AI ERROR:", e)
-
+        print("RUN_AI ERROR:", e)
         return {
             "reply": "Maaf kak, terjadi error 🙏",
-            "lead": {},
             "status": "ERROR"
         }
 

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dashboard Calistung</title>
+    <title>Dashboard</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -10,7 +10,6 @@
 
 <div class="layout">
 
-    <!-- SIDEBAR -->
     <div class="sidebar">
         <h2>🚀 CRM</h2>
         <a href="/dashboard">📊 Dashboard</a>
@@ -19,36 +18,34 @@
         <a href="/logout">🚪 Logout</a>
     </div>
 
-    <!-- MAIN -->
     <div class="main">
 
-        <h1>📊 Dashboard Leads</h1>
+        <h1>📊 Dashboard</h1>
 
-        <!-- KPI CARDS -->
-        <div class="cards">
-            <div class="card">
-                <h3>Total</h3>
-                <p>{{ total | default(0) }}</p>
-            </div>
+        <!-- BOT TOGGLE -->
+        <div style="margin-bottom:20px;">
+            <label>
+                <input type="checkbox"
+                       id="botToggle"
+                       onchange="toggleBot(this.checked)"
+                       {{ 'checked' if bot_active else '' }}>
+                🤖 Bot Active
+            </label>
 
-            <div class="card hot">
-                <h3>HOT</h3>
-                <p>{{ hot | default(0) }}</p>
-            </div>
-
-            <div class="card warm">
-                <h3>WARM</h3>
-                <p>{{ warm | default(0) }}</p>
-            </div>
-
-            <div class="card cold">
-                <h3>COLD</h3>
-                <p>{{ cold | default(0) }}</p>
-            </div>
+            <span id="botStatusText">
+                {{ 'ON' if bot_active else 'OFF' }}
+            </span>
         </div>
 
-        <!-- CHART -->
-        <canvas id="leadChart"></canvas>
+        <!-- KPI -->
+        <div class="cards">
+            <div class="card"><h3>Total</h3><p>{{ total }}</p></div>
+            <div class="card hot"><h3>HOT</h3><p>{{ hot }}</p></div>
+            <div class="card warm"><h3>WARM</h3><p>{{ warm }}</p></div>
+            <div class="card cold"><h3>COLD</h3><p>{{ cold }}</p></div>
+        </div>
+
+        <canvas id="chart"></canvas>
 
         <!-- TABLE -->
         <table>
@@ -61,10 +58,10 @@
 
             {% for lead in leads %}
             <tr>
-                <td>{{ lead.nama_orangtua | default("-") }}</td>
-                <td>{{ lead.nama_anak | default("-") }}</td>
-                <td>{{ lead.whatsapp | default("-") }}</td>
-                <td>{{ lead.status | default("-") }}</td>
+                <td>{{ lead.nama_orangtua }}</td>
+                <td>{{ lead.nama_anak }}</td>
+                <td>{{ lead.whatsapp }}</td>
+                <td>{{ lead.status }}</td>
             </tr>
             {% endfor %}
         </table>
@@ -72,48 +69,47 @@
     </div>
 </div>
 
-<!-- SAFE DATA BRIDGE (JINJA → JS) -->
 <script>
-const dashboardData = {{ {
-    "hot": hot | default(0),
-    "warm": warm | default(0),
-    "cold": cold | default(0)
-} | tojson }};
+async function toggleBot(status) {
+    const checkbox = document.getElementById("botToggle");
+
+    try {
+        const res = await fetch("/api/bot/toggle", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ status })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            console.log("Bot updated:", status);
+        } else {
+            alert("Gagal update bot");
+            checkbox.checked = !status;
+        }
+
+    } catch (err) {
+        console.error(err);
+        alert("Error koneksi");
+        checkbox.checked = !status;
+    }
+}
 </script>
 
-<!-- CHART LOGIC -->
 <script>
-window.addEventListener('load', function () {
+const ctx = document.getElementById("chart");
 
-    const canvas = document.getElementById('leadChart');
-
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-
-    const hot = dashboardData.hot || 0;
-    const warm = dashboardData.warm || 0;
-    const cold = dashboardData.cold || 0;
-
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['COLD', 'WARM', 'HOT'],
-            datasets: [{
-                label: 'Leads',
-                data: [cold, warm, hot]
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    display: true
-                }
-            }
-        }
-    });
-
+new Chart(ctx, {
+    type: "bar",
+    data: {
+        labels: ["COLD","WARM","HOT"],
+        datasets: [{
+            data: [{{ cold }}, {{ warm }}, {{ hot }}]
+        }]
+    }
 });
 </script>
 

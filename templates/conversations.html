@@ -3,29 +3,19 @@
 <head>
     <title>Conversations</title>
     <link rel="stylesheet" href="/static/style.css">
-    <style>
-        body {
-            font-family: Arial;
-            background: #f5f6fa;
-            padding: 20px;
-        }
 
+    <style>
         .topbar {
             display:flex;
             justify-content:space-between;
             align-items:center;
         }
 
-        .nav a {
-            margin-right:10px;
-            text-decoration:none;
-        }
-
         table {
             width:100%;
             background:white;
-            border-collapse:collapse;
             margin-top:20px;
+            border-collapse:collapse;
         }
 
         th, td {
@@ -64,9 +54,8 @@
 <div class="topbar">
     <h2>💬 Conversations</h2>
 
-    <div class="nav">
-        <a href="/dashboard">Leads</a>
-        <a href="/conversations">Chats</a>
+    <div>
+        <a href="/dashboard">Leads</a> |
         <a href="/settings">Settings</a>
     </div>
 </div>
@@ -75,7 +64,7 @@
 
 <table>
     <tr>
-        <th>User ID</th>
+        <th>User</th>
         <th>Conversation</th>
         <th>Time</th>
     </tr>
@@ -85,24 +74,17 @@
         <td>{{ chat.user_id }}</td>
 
         <td>
-            <div class="user">
-                👤 {{ chat.message }}
-            </div>
-
-            <div class="bot">
-                🤖 {{ chat.response }}
-            </div>
+            <div class="user">👤 {{ chat.message }}</div>
+            <div class="bot">🤖 {{ chat.response }}</div>
         </td>
 
-        <td class="time">
-            {{ chat.created_at }}
-        </td>
+        <td class="time">{{ chat.created_at }}</td>
     </tr>
     {% endfor %}
 </table>
 
 {% else %}
-    <p class="empty">Belum ada chat masuk</p>
+<p class="empty">Belum ada chat</p>
 {% endif %}
 
 </body>
