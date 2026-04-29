@@ -1,134 +1,52 @@
 from fastapi import APIRouter, Request, Depends
-from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
-
+from database.database import SessionLocal
 from database.models import User
-from core.security import verify_password, hash_password
-from core.dependencies import get_db
+from services.bot_engine import handle_message
+from bot.telegram import send_telegram
 
-router = APIRouter()
-templates = Jinja2Templates(directory="templates")
-
-
-# =========================
-# LOGIN PAGE
-# =========================
-@router.get("/login")
-def login_page(request: Request):
-    if request.session.get("user_id"):
-        return RedirectResponse("/dashboard", status_code=302)
-
-    return templates.TemplateResponse("login.html", {"request": request})
+router = APIRouter(prefix="/webhook", tags=["telegram"])
 
 
-# =========================
-# LOGIN ACTION
-# =========================
-@router.post("/login")
-async def login(request: Request, db=Depends(get_db)):
-    form = await request.form()
+@router.post("/telegram")
+async def telegram_webhook(request: Request):
+    db = SessionLocal()
 
-    username = form.get("username", "").strip()
-    password = form.get("password", "").strip()
+    try:
+        data = await request.json()
 
-    if not username or not password:
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "error": "Username & password wajib diisi"
-            }
-        )
+        if "message" not in data:
+            return {"ok": True}
 
-    user = db.query(User).filter(User.username == username).first()
+        message_data = data["message"]
 
-    if not user or not verify_password(password, user.password):
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "error": "Username atau password salah"
-            }
-        )
+        message = message_data.get("text", "")
+        telegram_id = str(message_data["chat"]["id"])
 
-    # ✅ simpan session
-    request.session["user_id"] = user.id
+        if not message:
+            return {"ok": True}
 
-    return RedirectResponse("/dashboard", status_code=302)
+        print(f"📩 Message from {telegram_id}: {message}")
 
+        # 🔥 cari owner berdasarkan telegram_id
+        owner = db.query(User).filter(
+            User.telegram_id == telegram_id
+        ).first()
 
-# =========================
-# LOGOUT
-# =========================
-@router.get("/logout")
-def logout(request: Request):
-    request.session.clear()
-    return RedirectResponse("/login", status_code=302)
+        if not owner:
+            print("❌ Owner tidak ditemukan")
+            return {"ok": True}
 
+        # 🔥 kirim ke AI (pakai owner.id)
+        result = await handle_message(telegram_id, message, owner.id)
 
-# =========================
-# CREATE SUPER ADMIN (INIT ONLY)
-# =========================
-@router.get("/init-superadmin")
-def init_superadmin(request: Request, db=Depends(get_db)):
+        if result and result.get("reply"):
+            await send_telegram(telegram_id, result["reply"])
 
-    secret = request.query_params.get("secret")
+        return {"ok": True}
 
-    if secret != "init-admin-123":
-        return {"error": "Unauthorized"}
+    except Exception as e:
+        print("❌ WEBHOOK ERROR:", e)
+        return {"ok": True}
 
-    existing = db.query(User).filter(User.role == "superadmin").first()
-
-    if existing:
-        return {"msg": "Superadmin sudah ada"}
-
-    user = User(
-        username="admin",
-        password=hash_password("admin123"),
-        role="superadmin",      # 🔥 penting
-        telegram_id=None,
-        bot_active=True
-    )
-
-    db.add(user)
-    db.commit()
-
-    return {"msg": "Superadmin created"}
-
-
-# =========================
-# OPTIONAL: CREATE ADMIN (MANUAL API)
-# =========================
-@router.get("/create-admin")
-def create_admin(request: Request, db=Depends(get_db)):
-
-    # ⚠️ hanya untuk development/testing
-    secret = request.query_params.get("secret")
-
-    if secret != "init-admin-123":
-        return {"error": "Unauthorized"}
-
-    username = request.query_params.get("username")
-    password = request.query_params.get("password")
-    telegram_id = request.query_params.get("telegram_id")
-
-    if not username or not password or not telegram_id:
-        return {"error": "username, password, telegram_id wajib"}
-
-    # cek duplicate
-    existing = db.query(User).filter(User.username == username).first()
-    if existing:
-        return {"error": "Username sudah dipakai"}
-
-    user = User(
-        username=username,
-        password=hash_password(password),
-        role="admin",
-        telegram_id=telegram_id,
-        bot_active=True
-    )
-
-    db.add(user)
-    db.commit()
-
-    return {"msg": f"Admin {username} created"}
+    finally:
+        db.close()
