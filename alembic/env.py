@@ -4,6 +4,9 @@ import sys
 
 from sqlalchemy import engine_from_config, pool
 from alembic import context
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # =========================
 # FIX PYTHON PATH (IMPORTANT)
