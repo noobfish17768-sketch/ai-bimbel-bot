@@ -25,11 +25,6 @@ def get_leads(request: Request, status: Optional[str] = None, q: Optional[str] =
 
     user_id = get_current_user_db(request)
 
-    if not user_id:
-        return {"error": "Unauthorized"}
-
-    user_id = int(user_id)
-
     per_page = 10
 
     query = db.query(LeadDB).filter(LeadDB.owner_id == user_id)
@@ -65,15 +60,12 @@ def update_status(request: Request, data: UpdateStatusRequest, db=Depends(get_db
 
     user_id = get_current_user_db(request)
 
-    if not user_id:
-        return {"error": "Unauthorized"}
-
     if data.status not in ["HOT", "WARM", "COLD"]:
         return {"error": "Invalid status"}
 
     lead = db.query(LeadDB).filter(
         LeadDB.id == data.lead_id,
-        LeadDB.owner_id == int(user_id)
+        LeadDB.owner_id == user_id
     ).first()
 
     if not lead:
@@ -90,12 +82,9 @@ def delete_lead(lead_id: int, request: Request, db=Depends(get_db)):
 
     user_id = get_current_user_db(request)
 
-    if not user_id:
-        return {"error": "Unauthorized"}
-
     lead = db.query(LeadDB).filter(
         LeadDB.id == lead_id,
-        LeadDB.owner_id == int(user_id)
+        LeadDB.owner_id == user_id
     ).first()
 
     if not lead:

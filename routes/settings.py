@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from database.models import BotSetting
 from core.dependencies import get_db
-from core.security import get_current_user_web
+from core.security import get_current_user_web, get_current_user_db
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -14,13 +14,14 @@ templates = Jinja2Templates(directory="templates")
 @router.get("/settings")
 def settings_page(request: Request, db=Depends(get_db)):
 
-    user_id = get_current_user_web(request)
+    user = get_current_user_web(request)
 
-    if not user_id:
-        return RedirectResponse("/login", status_code=302)
+    # kalau redirect (belum login)
+    if not hasattr(user, "id"):
+        return user
 
     settings = db.query(BotSetting).filter(
-        BotSetting.user_id == str(user_id)
+        BotSetting.user == str(user)
     ).all()
 
     return templates.TemplateResponse(
@@ -37,10 +38,7 @@ class SettingUpdate(BaseModel):
 @router.post("/api/settings")
 def update_setting(request: Request, data: SettingUpdate, db=Depends(get_db)):
 
-    user_id = get_current_user_web(request)
-
-    if not user_id:
-        return {"error": "Unauthorized"}
+    user_id = get_current_user_db(request)
 
     setting = db.query(BotSetting).filter(
         BotSetting.user_id == str(user_id),

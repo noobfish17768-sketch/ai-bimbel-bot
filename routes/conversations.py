@@ -13,17 +13,11 @@ templates = Jinja2Templates(directory="templates")
 @router.get("/conversations")
 def conversations(request: Request, db=Depends(get_db)):
 
-    user_id = get_current_user_web(request)
+    user = get_current_user_web(request)
 
-    if not user_id:
-        return RedirectResponse("/login", status_code=302)
-
-    # 🔥 VALIDASI USER MASIH ADA
-    user = db.query(User).filter(User.id == int(user_id)).first()
-
-    if not user:
-        request.session.clear()
-        return RedirectResponse("/login", status_code=302)
+    # kalau belum login → redirect
+    if not hasattr(user, "id"):
+        return user
 
     chats = db.query(Conversation)\
         .filter(Conversation.user_id == str(user.id))\

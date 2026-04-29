@@ -14,8 +14,9 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String, unique=True, index=True, nullable=False)
     password = Column(String, nullable=False)
-
     role = Column(String, default="admin")
+    telegram_id = Column(String, unique=True)
+    bot_active = Column(Boolean, default=True)
 
     # 🔥 SINGLE SOURCE OF TRUTH
     bot_active = Column(Boolean, default=True)
