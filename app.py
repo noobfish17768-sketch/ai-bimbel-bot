@@ -12,6 +12,7 @@ from routes.bot import router as bot_router
 from routes.leads import router as leads_router
 from bot.webhook import router as webhook_router
 from routes.conversations import router as conv_router
+from routes.admin import router as admin_router
 
 print("🚀 START APP")
 
@@ -35,6 +36,7 @@ app.include_router(bot_router)
 app.include_router(leads_router)
 app.include_router(webhook_router)
 app.include_router(conv_router)
+app.include_router(admin_router)
 
 # =========================
 # STATIC

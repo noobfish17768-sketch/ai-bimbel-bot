@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 from database.models import User
 from core.dependencies import get_db
-from core.security import get_current_user
+from core.security import get_current_user_db
 from cache.cache import redis_client
 
 router = APIRouter(prefix="/api/bot", tags=["bot"])
@@ -19,7 +19,7 @@ def toggle_bot(
     data: ToggleRequest,
     db=Depends(get_db)
 ):
-    user_id = get_current_user(request)
+    user_id = get_current_user_db(request)
 
     if not user_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -39,7 +39,11 @@ def toggle_bot(
 
     if redis_client:
         try:
-            redis_client.set(f"bot:{user.id}", str(data.status))
+            redis_client.set(
+                f"bot:{user.id}",
+                str(data.status),
+                ex=3600  # cache 1 jam
+            )
         except Exception as e:
             print("Redis error:", e)
 

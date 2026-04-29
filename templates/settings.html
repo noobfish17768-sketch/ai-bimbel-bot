@@ -12,55 +12,12 @@
             margin-top:20px;
         }
 
-        .toggle {
-            display:flex;
-            align-items:center;
-            gap:10px;
-        }
-
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 50px;
-            height: 24px;
-        }
-
-        .switch input { display:none; }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            background: #ccc;
-            border-radius: 24px;
-            top:0; left:0; right:0; bottom:0;
-            transition:.3s;
-        }
-
-        .slider:before {
-            position:absolute;
-            content:"";
-            height:18px;
-            width:18px;
-            left:3px;
-            bottom:3px;
-            background:white;
-            border-radius:50%;
-            transition:.3s;
-        }
-
-        input:checked + .slider {
-            background:#4CAF50;
-        }
-
-        input:checked + .slider:before {
-            transform: translateX(26px);
-        }
-
-        input, select {
+        input {
             padding:10px;
             margin-top:10px;
             border-radius:5px;
             border:1px solid #ccc;
+            width:100%;
         }
 
         button {
@@ -79,45 +36,17 @@
 
 <h2>⚙️ Bot Settings</h2>
 
-<!-- 🔥 BOT TOGGLE -->
+<!-- ADD / UPDATE -->
 <div class="card">
-    <h3>Bot Control</h3>
+    <h3>Tambah / Update Setting</h3>
 
-    {% set bot_status = "OFF" %}
-    {% for s in settings %}
-        {% if s.key == "bot_status" %}
-            {% set bot_status = s.value %}
-        {% endif %}
-    {% endfor %}
-
-    <div class="toggle">
-        <span>Bot Status:</span>
-
-        <label class="switch">
-            <input type="checkbox"
-                   id="botToggle"
-                   onchange="toggleBot(this.checked)"
-                   {{ 'checked' if bot_status == 'ON' else '' }}>
-            <span class="slider"></span>
-        </label>
-
-        <span id="statusText">
-            {{ "ON" if bot_status == "ON" else "OFF" }}
-        </span>
-    </div>
-</div>
-
-<!-- 🔥 UPDATE SETTING -->
-<div class="card">
-    <h3>Update Setting</h3>
-
-    <input type="text" id="key" placeholder="Key">
+    <input type="text" id="key" placeholder="Key (contoh: greeting)">
     <input type="text" id="value" placeholder="Value">
 
     <button onclick="saveSetting()">Save</button>
 </div>
 
-<!-- 🔥 LIST -->
+<!-- LIST SETTINGS -->
 <div class="card">
     <h3>Semua Settings</h3>
 
@@ -128,37 +57,7 @@
     </ul>
 </div>
 
-<!-- ========================= -->
-<!-- 🔥 JAVASCRIPT FIXED -->
-<!-- ========================= -->
-
 <script>
-async function toggleBot(status) {
-    try {
-        const res = await fetch("/api/bot/toggle", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                status: status
-            })
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-            document.getElementById("statusText").innerText = status ? "ON" : "OFF";
-        } else {
-            alert(data.error || "Gagal update bot");
-        }
-
-    } catch (err) {
-        console.error(err);
-        alert("Server error");
-    }
-}
-
 async function saveSetting() {
     const key = document.getElementById("key").value;
     const value = document.getElementById("value").value;
@@ -174,10 +73,7 @@ async function saveSetting() {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({
-                key: key,
-                value: value
-            })
+            body: JSON.stringify({ key, value })
         });
 
         const data = await res.json();
@@ -191,7 +87,7 @@ async function saveSetting() {
 
     } catch (err) {
         console.error(err);
-        alert("Error server");
+        alert("Server error");
     }
 }
 </script>

@@ -1,3 +1,4 @@
+import os
 import threading
 from database.database import Base, engine
 from services.followup import run_followup
@@ -30,6 +31,8 @@ def startup():
     print("🚀 STARTUP INIT")
 
     init_db()
-    start_followup_worker()
+
+    if os.getenv("ENABLE_FOLLOWUP") == "true":
+        start_followup_worker()
 
     print("✅ SYSTEM READY")

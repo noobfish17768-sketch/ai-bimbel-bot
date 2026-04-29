@@ -55,8 +55,9 @@
     <h2>💬 Conversations</h2>
 
     <div>
-        <a href="/dashboard">Leads</a> |
-        <a href="/settings">Settings</a>
+        <a href="/dashboard">Dashboard</a> |
+        <a href="/settings">Settings</a> |
+        <a href="/logout">Logout</a>
     </div>
 </div>
 
@@ -71,7 +72,7 @@
 
     {% for chat in chats %}
     <tr>
-        <td>{{ chat.user_id }}</td>
+        <td>{{ chat.external_id }}</td>
 
         <td>
             <div class="user">👤 {{ chat.message }}</div>

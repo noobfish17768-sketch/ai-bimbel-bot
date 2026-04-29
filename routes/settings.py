@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from database.models import BotSetting
 from core.dependencies import get_db
-from core.security import get_current_user
+from core.security import get_current_user_web
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -14,7 +14,7 @@ templates = Jinja2Templates(directory="templates")
 @router.get("/settings")
 def settings_page(request: Request, db=Depends(get_db)):
 
-    user_id = get_current_user(request)
+    user_id = get_current_user_web(request)
 
     if not user_id:
         return RedirectResponse("/login", status_code=302)
@@ -37,7 +37,7 @@ class SettingUpdate(BaseModel):
 @router.post("/api/settings")
 def update_setting(request: Request, data: SettingUpdate, db=Depends(get_db)):
 
-    user_id = get_current_user(request)
+    user_id = get_current_user_web(request)
 
     if not user_id:
         return {"error": "Unauthorized"}

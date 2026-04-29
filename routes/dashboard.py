@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 
 from database.models import LeadDB, User
 from core.dependencies import get_db
-from core.security import get_current_user
+from core.security import get_current_user_web
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -13,7 +13,7 @@ templates = Jinja2Templates(directory="templates")
 @router.get("/dashboard")
 def dashboard(request: Request, status: str = None, q: str = None, page: int = 1, db=Depends(get_db)):
 
-    user_id = get_current_user(request)
+    user_id = get_current_user_web(request)
 
     if not user_id:
         return RedirectResponse("/login", status_code=302)
@@ -58,6 +58,6 @@ def dashboard(request: Request, status: str = None, q: str = None, page: int = 1
             "cold": cold,
             "total": query.count(),
             "user_id": user.id,
-            "bot_active": user.bot_active
+            "bot_active": bool(user.bot_active)
         }
     )

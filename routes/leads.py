@@ -4,7 +4,7 @@ from typing import Optional
 
 from database.models import LeadDB
 from core.dependencies import get_db
-from core.security import get_current_user
+from core.security import get_current_user_db
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
@@ -23,7 +23,7 @@ class LeadResponse(BaseModel):
 @router.get("/")
 def get_leads(request: Request, status: Optional[str] = None, q: Optional[str] = None, page: int = 1, db=Depends(get_db)):
 
-    user_id = get_current_user(request)
+    user_id = get_current_user_db(request)
 
     if not user_id:
         return {"error": "Unauthorized"}
@@ -49,7 +49,7 @@ def get_leads(request: Request, status: Optional[str] = None, q: Optional[str] =
         .all()
 
     return {
-        "data": [LeadResponse.model_validate(l).dict() for l in leads],
+        "data": [LeadResponse.model_validate(l).model_dump() for l in leads],
         "total": query.count(),
         "page": page
     }
@@ -63,7 +63,7 @@ class UpdateStatusRequest(BaseModel):
 @router.post("/update-status")
 def update_status(request: Request, data: UpdateStatusRequest, db=Depends(get_db)):
 
-    user_id = get_current_user(request)
+    user_id = get_current_user_db(request)
 
     if not user_id:
         return {"error": "Unauthorized"}
@@ -88,7 +88,7 @@ def update_status(request: Request, data: UpdateStatusRequest, db=Depends(get_db
 @router.delete("/{lead_id}")
 def delete_lead(lead_id: int, request: Request, db=Depends(get_db)):
 
-    user_id = get_current_user(request)
+    user_id = get_current_user_db(request)
 
     if not user_id:
         return {"error": "Unauthorized"}

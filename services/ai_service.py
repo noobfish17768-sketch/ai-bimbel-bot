@@ -15,10 +15,14 @@ MAX_HISTORY = 6
 # =========================
 # BOT SETTING (OPTIONAL)
 # =========================
-def get_setting(key, default=None):
+def get_setting(user_id, key, default=None):
     db = SessionLocal()
     try:
-        setting = db.query(BotSetting).filter_by(key=key).first()
+        setting = db.query(BotSetting).filter_by(
+            user_id=str(user_id),
+            key=key
+        ).first()
+
         return setting.value if setting else default
     finally:
         db.close()
@@ -154,7 +158,7 @@ def calculate_score(message, status, prev):
 # =========================
 # MAIN AI
 # =========================
-def run_ai(user_id: str, message: str, owner_id: int = 1):
+def run_ai(user_id: str, message: str, owner_id: int):
 
     db = SessionLocal()
 
@@ -176,7 +180,8 @@ def run_ai(user_id: str, message: str, owner_id: int = 1):
         # GET LEAD
         # =========================
         lead = db.query(LeadDB).filter(
-            LeadDB.whatsapp == user_id
+            LeadDB.whatsapp == user_id,
+            LeadDB.owner_id == owner_id
         ).first()
 
         history = load_history(lead)

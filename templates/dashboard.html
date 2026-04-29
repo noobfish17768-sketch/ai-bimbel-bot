@@ -15,6 +15,7 @@
         <a href="/dashboard">📊 Dashboard</a>
         <a href="/conversations">💬 Chats</a>
         <a href="/settings">⚙️ Settings</a>
+        <a href="/admin">👑 Admin</a>
         <a href="/logout">🚪 Logout</a>
     </div>
 
@@ -45,6 +46,7 @@
             <div class="card cold"><h3>COLD</h3><p>{{ cold }}</p></div>
         </div>
 
+        <!-- CHART -->
         <canvas id="chart"></canvas>
 
         <!-- TABLE -->
@@ -58,8 +60,8 @@
 
             {% for lead in leads %}
             <tr>
-                <td>{{ lead.nama_orangtua }}</td>
-                <td>{{ lead.nama_anak }}</td>
+                <td>{{ lead.nama_orangtua or '-' }}</td>
+                <td>{{ lead.nama_anak or '-' }}</td>
                 <td>{{ lead.whatsapp }}</td>
                 <td>{{ lead.status }}</td>
             </tr>
@@ -85,7 +87,7 @@ async function toggleBot(status) {
         const data = await res.json();
 
         if (data.success) {
-            console.log("Bot updated:", status);
+            document.getElementById("botStatusText").innerText = status ? "ON" : "OFF";
         } else {
             alert("Gagal update bot");
             checkbox.checked = !status;
