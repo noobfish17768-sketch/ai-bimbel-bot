@@ -43,9 +43,7 @@ async def telegram_webhook(request: Request):
         # =========================
         # CARI OWNER (MULTI ADMIN)
         # =========================
-        owner = db.query(User).filter(
-            User.telegram_id == telegram_id
-        ).first()
+        owner = db.query(User).filter(User.id == 1).first()
 
         if not owner:
             print(f"❌ Owner tidak ditemukan untuk telegram_id={telegram_id}")
