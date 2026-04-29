@@ -21,7 +21,7 @@ def settings_page(request: Request, db=Depends(get_db)):
         return user
 
     settings = db.query(BotSetting).filter(
-        BotSetting.user == str(user)
+        BotSetting.user_id == str(user.id)
     ).all()
 
     return templates.TemplateResponse(
