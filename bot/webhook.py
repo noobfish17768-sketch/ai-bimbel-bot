@@ -18,14 +18,13 @@ async def telegram_webhook(request: Request):
         data = await request.json()
 
         # =========================
-        # VALIDASI BASIC
+        # VALIDASI
         # =========================
         if "message" not in data:
             return {"ok": True}
 
         message_data = data["message"]
 
-        # skip kalau bukan text (image, sticker, dll)
         if "text" not in message_data:
             return {"ok": True}
 
@@ -35,22 +34,19 @@ async def telegram_webhook(request: Request):
         if not message:
             return {"ok": True}
 
-        # =========================
-        # LOG
-        # =========================
         print(f"📩 Message from {telegram_id}: {message}")
 
         # =========================
-        # CARI OWNER (MULTI ADMIN)
+        # 🔥 GET OWNER (DEFAULT / SINGLE BOT MODE)
         # =========================
-        owner = db.query(User).filter(User.id == 1).first()
+        owner = db.query(User).filter(User.role == "admin").first()
 
         if not owner:
-            print(f"❌ Owner tidak ditemukan untuk telegram_id={telegram_id}")
+            print("❌ Tidak ada admin di database")
             return {"ok": True}
 
         # =========================
-        # BOT ACTIVE CHECK (OPTIONAL EXTRA SAFE)
+        # BOT STATUS
         # =========================
         if not owner.bot_active:
             print(f"⛔ Bot OFF untuk owner {owner.id}")
@@ -60,13 +56,13 @@ async def telegram_webhook(request: Request):
         # RUN AI
         # =========================
         result = await handle_message(
-            user_id=telegram_id,
+            user_id=telegram_id,   # lead
             message=message,
-            owner_id=owner.id
+            owner_id=owner.id      # admin
         )
 
         # =========================
-        # SEND RESPONSE
+        # SEND REPLY
         # =========================
         if result and result.get("reply"):
             await send_telegram(telegram_id, result["reply"])

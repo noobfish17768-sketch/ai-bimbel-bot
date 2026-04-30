@@ -4,24 +4,21 @@ from database.database import SessionLocal
 from database.models import User
 
 
-def get_owner_by_telegram(chat_id: str):
-    db = SessionLocal()
-    try:
-        # 🔥 mapping telegram ke owner
-        return db.query(User).filter(User.telegram_id == chat_id).first()
-    finally:
-        db.close()
-
-
+# =========================
+# BOT ACTIVE CHECK
+# =========================
 def is_bot_active(owner_id: int) -> bool:
+
+    # REDIS CACHE
     if redis_client:
         try:
             cached = redis_client.get(f"bot:{owner_id}")
             if cached is not None:
                 return cached == "True"
-        except:
-            pass
+        except Exception as e:
+            print("Redis error:", e)
 
+    # DB FALLBACK
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.id == owner_id).first()
@@ -30,20 +27,25 @@ def is_bot_active(owner_id: int) -> bool:
         db.close()
 
 
-async def handle_message(chat_id: str, message: str):
+# =========================
+# HANDLE MESSAGE (FINAL)
+# =========================
+async def handle_message(user_id: str, message: str, owner_id: int):
 
-    owner = get_owner_by_telegram(chat_id)
-
-    if not owner:
-        print("❌ OWNER NOT FOUND")
+    if not message:
         return None
 
-    if not is_bot_active(owner.id):
-        print(f"🤖 Bot OFF for owner {owner.id}")
+    # 🔥 cek bot owner
+    if not is_bot_active(owner_id):
+        print(f"🤖 Bot OFF for owner {owner_id}")
         return None
 
-    return run_ai(
-        user_id=chat_id,
-        message=message,
-        owner_id=owner.id
-    )
+    try:
+        return run_ai(
+            user_id=user_id,   # 🔥 ini lead (telegram user)
+            message=message,
+            owner_id=owner_id # 🔥 ini admin
+        )
+    except Exception as e:
+        print("BOT ENGINE ERROR:", e)
+        return {"reply": "System error 🙏"}
