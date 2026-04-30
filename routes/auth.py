@@ -56,29 +56,3 @@ async def login(request: Request, db=Depends(get_db)):
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/login", status_code=302)
-
-
-# =========================
-# CREATE ADMIN (DEV ONLY)
-# =========================
-@router.get("/create-admin")
-def create_admin(request: Request, db=Depends(get_db)):
-    secret = request.query_params.get("secret")
-
-    if secret != "init-admin-123":
-        return {"error": "Unauthorized"}
-
-    existing = db.query(User).filter_by(username="admin").first()
-
-    if existing:
-        return {"msg": "Admin sudah ada"}
-
-    user = User(
-        username="admin",
-        password=hash_password("admin123")
-    )
-
-    db.add(user)
-    db.commit()
-
-    return {"msg": "Admin created"}

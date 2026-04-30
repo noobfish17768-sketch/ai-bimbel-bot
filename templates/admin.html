@@ -124,6 +124,24 @@ async function createAdmin() {
         alert("Server error")
     }
 }
+
+async function deleteAdmin(id) {
+
+    if(!confirm("Yakin mau hapus admin ini?")) return
+
+    const res = await fetch(`/api/admin/${id}`, {
+        method: "DELETE"
+    })
+
+    const data = await res.json()
+
+    if(data.success){
+        alert("Admin deleted")
+        location.reload()
+    } else {
+        alert(data.detail || "Error")
+    }
+}
 </script>
 
 </body>
