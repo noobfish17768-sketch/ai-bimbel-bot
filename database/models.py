@@ -16,16 +16,16 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
 
+    role = Column(String, default="admin")  # 🔥 INI WAJIB ADA
+
     created_at = Column(DateTime, server_default=func.now())
 
-    # 🔥 OWNER RELATION
     bots_as_owner = relationship(
         "Bot",
         foreign_keys="[Bot.owner_id]",
         back_populates="owner"
     )
 
-    # 🔥 ADMIN RELATION
     bots_as_admin = relationship(
         "Bot",
         foreign_keys="[Bot.user_id]",
