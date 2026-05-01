@@ -24,6 +24,11 @@ def dashboard(
     if not hasattr(user, "id"):
         return user
 
+    print("USER:", user.id, user.role)
+
+    print("OWNER BOT:", db.query(Bot).filter(Bot.owner_id == user.id).all())
+    print("USER BOT:", db.query(Bot).filter(Bot.user_id == user.id).all())
+
     bot_id = get_current_bot(request, user)
 
     # fallback bot pertama (berdasarkan role)
@@ -90,7 +95,3 @@ def dashboard(
             "bot_active": getattr(user, "bot_active", True)
         }
     )
-print("USER:", user.id, user.role)
-
-print("OWNER BOT:", db.query(Bot).filter(Bot.owner_id == user.id).all())
-print("USER BOT:", db.query(Bot).filter(Bot.user_id == user.id).all())
