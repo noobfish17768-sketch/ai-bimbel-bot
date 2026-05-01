@@ -30,6 +30,7 @@ class Bot(Base):
     id = Column(Integer, primary_key=True)
 
     owner_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))   # user admin yang kelola bot
     name = Column(String)
 
     telegram_token = Column(String)   # 🔥 beda tiap client
