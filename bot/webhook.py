@@ -1,25 +1,19 @@
 from fastapi import APIRouter, Request
 from database.database import SessionLocal
-from database.models import User
+from database.models import Bot, User
 from services.bot_engine import handle_message
 from bot.telegram import send_telegram
 
 router = APIRouter(prefix="/webhook", tags=["telegram"])
 
 
-# =========================
-# TELEGRAM WEBHOOK
-# =========================
-@router.post("/telegram")
-async def telegram_webhook(request: Request):
+@router.post("/telegram/{bot_id}")
+async def telegram_webhook(bot_id: int, request: Request):
     db = SessionLocal()
 
     try:
         data = await request.json()
 
-        # =========================
-        # VALIDASI
-        # =========================
         if "message" not in data:
             return {"ok": True}
 
@@ -34,38 +28,43 @@ async def telegram_webhook(request: Request):
         if not message:
             return {"ok": True}
 
-        print(f"📩 Message from {telegram_id}: {message}")
+        print(f"📩 Bot {bot_id} | {telegram_id}: {message}")
 
         # =========================
-        # 🔥 GET OWNER (DEFAULT / SINGLE BOT MODE)
+        # 🔥 VALIDASI BOT
         # =========================
-        owner = db.query(User).filter(User.role == "admin").first()
+        bot = db.query(Bot).filter(Bot.id == bot_id).first()
 
-        if not owner:
-            print("❌ Tidak ada admin di database")
+        if not bot:
+            print("❌ Bot tidak ditemukan")
             return {"ok": True}
 
-        # =========================
-        # BOT STATUS
-        # =========================
-        if not owner.bot_active:
-            print(f"⛔ Bot OFF untuk owner {owner.id}")
+        owner_id = bot.user_id
+
+        owner = db.query(User).filter(User.id == owner_id).first()
+
+        if not owner or not owner.bot_active:
+            print(f"⛔ Bot OFF owner {owner_id}")
             return {"ok": True}
 
         # =========================
         # RUN AI
         # =========================
         result = await handle_message(
-            user_id=telegram_id,   # lead
+            user_id=telegram_id,
             message=message,
-            owner_id=owner.id      # admin
+            owner_id=owner_id
         )
 
         # =========================
-        # SEND REPLY
+        # SEND REPLY (🔥 pakai bot_id)
         # =========================
         if result and result.get("reply"):
-            await send_telegram(telegram_id, result["reply"])
+            await send_telegram(
+                bot_id=bot_id,
+                chat_id=telegram_id,
+                text=result["reply"]
+            )
 
         return {"ok": True}
 

@@ -12,8 +12,8 @@
 
     <div class="sidebar">
         <h2>🚀 CRM</h2>
-        <a href="/dashboard">📊 Dashboard</a>
-        <a href="/conversations">💬 Chats</a>
+        <a href="/dashboard?bot_id={{ current_bot_id }}">📊 Dashboard</a>
+        <a href="/conversations?bot_id={{ current_bot_id }}">💬 Chats</a>
         <a href="/settings">⚙️ Settings</a>
         <a href="/admin">👑 Admin</a>
         <a href="/logout">🚪 Logout</a>
@@ -22,6 +22,21 @@
     <div class="main">
 
         <h1>📊 Dashboard</h1>
+
+        <!-- 🔥 BOT SELECTOR -->
+        <div style="margin-bottom:20px;">
+            <form method="get" action="/dashboard">
+                <label>Pilih Bot:</label>
+                <select name="bot_id" onchange="this.form.submit()">
+                    {% for bot in bots %}
+                        <option value="{{ bot.id }}"
+                            {% if bot.id == current_bot_id %}selected{% endif %}>
+                            {{ bot.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
 
         <!-- BOT TOGGLE -->
         <div style="margin-bottom:20px;">

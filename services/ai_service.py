@@ -158,7 +158,7 @@ def calculate_score(message, status, prev):
 # =========================
 # MAIN AI
 # =========================
-def run_ai(user_id: str, message: str, owner_id: int):
+def run_ai(user_id: str, message: str, owner_id: int, bot_id: int):
 
     db = SessionLocal()
 
@@ -166,7 +166,7 @@ def run_ai(user_id: str, message: str, owner_id: int):
         user_id = str(user_id)
 
         # =========================
-        # BOT CONTROL (FIXED SAFE)
+        # BOT CONTROL
         # =========================
         owner = db.query(User).filter(User.id == owner_id).first()
         if owner and not owner.bot_active:
@@ -177,11 +177,12 @@ def run_ai(user_id: str, message: str, owner_id: int):
             }
 
         # =========================
-        # GET LEAD
+        # GET LEAD (FIX MULTI BOT)
         # =========================
         lead = db.query(LeadDB).filter(
             LeadDB.whatsapp == user_id,
-            LeadDB.owner_id == owner_id
+            LeadDB.owner_id == owner_id,
+            LeadDB.bot_id == bot_id   # 🔥 INI YANG BARU
         ).first()
 
         history = load_history(lead)
@@ -201,7 +202,7 @@ LEAD_SCORE: {prev_score}
 """
 
         # =========================
-        # AI CALL
+        # AI CALL (NO CHANGE)
         # =========================
         try:
             response = client.responses.create(
@@ -224,12 +225,15 @@ LEAD_SCORE: {prev_score}
 
         data = safe_parse(ai_text)
 
+        # =========================
+        # LOGIC AI (TIDAK DIUBAH)
+        # =========================
         new_status = detect_status(message, current_status)
         score = calculate_score(message, new_status, prev_score)
         reply = format_reply(data.get("reply", ""))
 
         # =========================
-        # UPDATE LEAD
+        # SAVE LEAD (MULTI BOT)
         # =========================
         if lead:
             lead.status = new_status
@@ -241,7 +245,8 @@ LEAD_SCORE: {prev_score}
                 status=new_status,
                 lead_score=score,
                 last_chat=datetime.utcnow(),
-                owner_id=owner_id
+                owner_id=owner_id,
+                bot_id=bot_id   # 🔥 INI WAJIB
             )
             db.add(lead)
             db.flush()

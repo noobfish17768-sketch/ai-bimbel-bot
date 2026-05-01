@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from starlette.middleware.sessions import SessionMiddleware
@@ -19,7 +19,7 @@ print("🚀 START APP")
 app = FastAPI()
 
 # =========================
-# SESSION (SECURE VERSION)
+# SESSION
 # =========================
 app.add_middleware(
     SessionMiddleware,

@@ -3,7 +3,7 @@ from fastapi import Request, HTTPException
 from fastapi.responses import RedirectResponse
 
 from database.database import SessionLocal
-from database.models import User
+from database.models import User, Bot
 
 
 # =========================
@@ -27,18 +27,11 @@ def hash_password(password: str) -> str:
 # BASIC (LEGACY - KEEP)
 # =========================
 def get_current_user(request: Request):
-    """
-    ⚠️ Simple version (NO DB CHECK)
-    Keep for backward compatibility only
-    """
     user_id = request.session.get("user_id")
     return int(user_id) if user_id else None
 
 
 def require_user(request: Request):
-    """
-    Legacy helper
-    """
     user_id = get_current_user(request)
     return user_id if user_id else None
 
@@ -47,12 +40,6 @@ def require_user(request: Request):
 # 🔥 STRONG VERSION (API)
 # =========================
 def get_current_user_db(request: Request) -> User:
-    """
-    ✅ Recommended for API / backend
-    - Validates session
-    - Validates user exists in DB
-    - Raises HTTPException if invalid
-    """
 
     db = SessionLocal()
 
@@ -78,10 +65,6 @@ def get_current_user_db(request: Request) -> User:
 # 🔥 WEB VERSION (REDIRECT)
 # =========================
 def get_current_user_web(request: Request) -> User:
-    """
-    ✅ Recommended for HTML pages
-    - Redirects to /login instead of JSON error
-    """
 
     db = SessionLocal()
 
@@ -101,3 +84,33 @@ def get_current_user_web(request: Request) -> User:
 
     finally:
         db.close()
+
+
+# =========================
+# 🔥 MULTI BOT (UPGRADE)
+# =========================
+def get_current_bot(request: Request, user: User = None):
+    bot_id = request.query_params.get("bot_id")
+
+    if not bot_id:
+        return None
+
+    try:
+        bot_id = int(bot_id)
+    except:
+        return None
+
+    # 🔥 VALIDASI BOT MILIK USER
+    if user:
+        db = SessionLocal()
+        try:
+            bot = db.query(Bot).filter(
+                Bot.id == bot_id,
+                Bot.user_id == user.id
+            ).first()
+
+            return bot.id if bot else None
+        finally:
+            db.close()
+
+    return bot_id

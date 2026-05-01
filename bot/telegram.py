@@ -1,33 +1,47 @@
 import os
 from dotenv import load_dotenv
 from telegram import Bot
+from database.database import SessionLocal
+from database.models import Bot as BotModel
 
-# load env
 load_dotenv()
 
-# =========================
-# CONFIG
-# =========================
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+# cache bot instance biar gak create ulang terus
+BOT_CACHE = {}
+
+
+def get_bot(bot_id: int):
+    if bot_id in BOT_CACHE:
+        return BOT_CACHE[bot_id]
+
+    db = SessionLocal()
+    try:
+        bot_data = db.query(BotModel).filter(BotModel.id == bot_id).first()
+
+        if not bot_data or not bot_data.token:
+            print(f"❌ Bot {bot_id} token not found")
+            return None
+
+        bot = Bot(token=bot_data.token)
+
+        BOT_CACHE[bot_id] = bot
+        print(f"✅ Bot {bot_id} initialized")
+
+        return bot
+
+    finally:
+        db.close()
 
 
 # =========================
-# INIT BOT (sekali saja)
+# SEND MESSAGE (MULTI BOT)
 # =========================
-if TELEGRAM_TOKEN:
-    bot = Bot(token=TELEGRAM_TOKEN)
-    print("✅ Bot Telegram Ready")
-else:
-    bot = None
-    print("❌ TELEGRAM TOKEN NOT FOUND")
+async def send_telegram(bot_id: int, chat_id: str, text: str):
 
+    bot = get_bot(bot_id)
 
-# =========================
-# SEND MESSAGE (REUSABLE)
-# =========================
-async def send_telegram(chat_id: str, text: str):
     if not bot:
-        return {"error": "bot not ready"}
+        return {"error": "bot not found"}
 
     try:
         await bot.send_message(chat_id=chat_id, text=text)

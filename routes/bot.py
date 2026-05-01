@@ -1,50 +1,76 @@
-from fastapi import APIRouter, Depends, Request, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Request
+from database.database import SessionLocal
+from database.models import Bot, User
+from services.bot_engine import handle_message
+from bot.telegram import send_telegram
 
-from database.models import User
-from core.dependencies import get_db
-from core.security import get_current_user_db
-from cache.cache import redis_client
-
-router = APIRouter(prefix="/api/bot", tags=["bot"])
+router = APIRouter(prefix="/webhook", tags=["telegram"])
 
 
-class ToggleRequest(BaseModel):
-    status: bool
-
-
-@router.post("/toggle")
-def toggle_bot(
-    request: Request,
-    data: ToggleRequest,
-    db=Depends(get_db)
-):
-    user_id = get_current_user_db(request)
-
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+@router.post("/telegram/{bot_id}")
+async def telegram_webhook(bot_id: int, request: Request):
+    db = SessionLocal()
 
     try:
-        user.bot_active = data.status
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print("DB ERROR:", e)
-        raise HTTPException(status_code=500, detail="Update failed")
+        data = await request.json()
 
-    if redis_client:
-        try:
-            redis_client.set(
-                f"bot:{user.id}",
-                str(data.status),
-                ex=3600  # cache 1 jam
+        if "message" not in data:
+            return {"ok": True}
+
+        message_data = data["message"]
+
+        if "text" not in message_data:
+            return {"ok": True}
+
+        message = message_data.get("text", "").strip()
+        telegram_id = str(message_data["chat"]["id"])
+
+        if not message:
+            return {"ok": True}
+
+        print(f"📩 Bot {bot_id} | {telegram_id}: {message}")
+
+        # =========================
+        # 🔥 VALIDASI BOT
+        # =========================
+        bot = db.query(Bot).filter(Bot.id == bot_id).first()
+
+        if not bot:
+            print("❌ Bot tidak ditemukan")
+            return {"ok": True}
+
+        owner_id = bot.user_id
+
+        owner = db.query(User).filter(User.id == owner_id).first()
+
+        if not owner or not owner.bot_active:
+            print(f"⛔ Bot OFF owner {owner_id}")
+            return {"ok": True}
+
+        # =========================
+        # RUN AI
+        # =========================
+        result = await handle_message(
+            user_id=telegram_id,
+            message=message,
+            owner_id=owner_id
+        )
+
+        # =========================
+        # SEND REPLY (🔥 pakai bot_id)
+        # =========================
+        if result and result.get("reply"):
+            await send_telegram(
+                bot_id=bot_id,
+                chat_id=telegram_id,
+                text=result["reply"]
             )
-        except Exception as e:
-            print("Redis error:", e)
 
-    return {
-        "success": True,
-        "bot_active": data.status
-    }
+        return {"ok": True}
+
+    except Exception as e:
+        print("❌ WEBHOOK ERROR:", e)
+        return {"ok": True}
+
+    finally:
+        db.close()

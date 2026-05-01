@@ -6,36 +6,41 @@ from database.database import Base
 
 
 # =========================
-# 👤 USER
+# 👤 USER (OWNER SAAS)
 # =========================
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
-    username = Column(String, unique=True, index=True, nullable=False)
+    username = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
-    role = Column(String, default="admin")
-    telegram_id = Column(String, unique=True)
-    bot_active = Column(Boolean, default=True)
-
-    # 🔥 SINGLE SOURCE OF TRUTH
-    bot_active = Column(Boolean, default=True)
 
     created_at = Column(DateTime, server_default=func.now())
 
-    # relasi ke leads
-    leads = relationship(
-        "LeadDB",
-        back_populates="owner",
-        foreign_keys="LeadDB.owner_id",
-        cascade="all, delete"
-    )
+    # 🔗 RELATION
+    bots = relationship("Bot", back_populates="owner", cascade="all, delete")
 
-    # relasi assigned leads (optional future CRM)
-    assigned_leads = relationship(
-        "LeadDB",
-        foreign_keys="LeadDB.assigned_to"
-    )
+
+# =========================
+# 🤖 BOT (MULTI BOT CORE)
+# =========================
+class Bot(Base):
+    __tablename__ = "bots"
+
+    id = Column(Integer, primary_key=True)
+
+    owner_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String)
+
+    telegram_token = Column(String)   # 🔥 beda tiap client
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+    # 🔗 RELATION
+    owner = relationship("User", back_populates="bots")
+    leads = relationship("LeadDB", back_populates="bot", cascade="all, delete")
+    settings = relationship("BotSetting", back_populates="bot", cascade="all, delete")
 
 
 # =========================
@@ -46,62 +51,39 @@ class LeadDB(Base):
 
     id = Column(Integer, primary_key=True)
 
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
+    bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
 
-    telegram_id = Column(String, unique=True, index=True)
+    telegram_id = Column(String, index=True)
+    whatsapp = Column(String, index=True)
 
     nama_orangtua = Column(String)
     nama_anak = Column(String)
     umur_anak = Column(String)
 
-    whatsapp = Column(String, unique=True, index=True, nullable=False)
-
     status = Column(String, default="COLD")
-
     notes = Column(Text)
 
     created_at = Column(DateTime, server_default=func.now())
     last_chat = Column(DateTime, server_default=func.now())
 
-    chat_history = Column(Text)
-
-    last_followup = Column(DateTime)
-    next_followup = Column(DateTime)
-
     followup_count = Column(Integer, default=0)
     lead_score = Column(Integer, default=0)
 
-    converted = Column(Integer, default=0)
-    response_count = Column(Integer, default=0)
-
-    # relasi owner
-    owner = relationship(
-        "User",
-        foreign_keys=[owner_id],
-        back_populates="leads"
-    )
-
-    # relasi chat
-    conversations = relationship(
-        "Conversation",
-        back_populates="lead",
-        cascade="all, delete-orphan"
-    )
+    # 🔗 RELATION
+    bot = relationship("Bot", back_populates="leads")
+    conversations = relationship("Conversation", back_populates="lead", cascade="all, delete-orphan")
 
 
 # =========================
-# 💬 CONVERSATIONS
+# 💬 CONVERSATION
 # =========================
 class Conversation(Base):
     __tablename__ = "conversations"
 
     id = Column(Integer, primary_key=True)
 
-    user_id = Column(String, index=True)      # owner dashboard
-    external_id = Column(String, index=True)  # telegram user
-
-    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    bot_id = Column(Integer, ForeignKey("bots.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id"))
 
     message = Column(Text)
     response = Column(Text)
@@ -112,17 +94,18 @@ class Conversation(Base):
 
 
 # =========================
-# ⚙️ BOT SETTINGS (CONFIG ONLY)
+# ⚙️ BOT SETTINGS
 # =========================
 class BotSetting(Base):
     __tablename__ = "bot_settings"
 
     id = Column(Integer, primary_key=True)
 
-    user_id = Column(String, index=True)
+    bot_id = Column(Integer, ForeignKey("bots.id"))
 
-    # 🔥 hanya config, bukan status bot
-    key = Column(String, index=True)
+    key = Column(String)
     value = Column(String)
 
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    bot = relationship("Bot", back_populates="settings")
