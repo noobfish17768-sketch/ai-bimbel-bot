@@ -100,17 +100,21 @@ def get_current_bot(request: Request, user: User = None):
     except:
         return None
 
-    # 🔥 VALIDASI BOT MILIK USER
-    if user:
-        db = SessionLocal()
-        try:
-            bot = db.query(Bot).filter(
-                Bot.id == bot_id,
-                Bot.user_id == user.id
-            ).first()
+    if not user:
+        return bot_id
 
-            return bot.id if bot else None
-        finally:
-            db.close()
+    db = SessionLocal()
+    try:
 
-    return bot_id
+        bot = db.query(Bot).filter(
+            Bot.id == bot_id,
+            (
+                (Bot.owner_id == user.id) |
+                (Bot.user_id == user.id)
+            )
+        ).first()
+
+        return bot.id if bot else None
+
+    finally:
+        db.close()

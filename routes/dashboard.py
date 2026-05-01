@@ -24,16 +24,19 @@ def dashboard(
     if not hasattr(user, "id"):
         return user
 
-    # =========================
-    # 🔥 GET CURRENT BOT
-    # =========================
-    bot_id = get_current_bot(request)
+    bot_id = get_current_bot(request, user)
 
-    # fallback ke bot pertama
+    # fallback bot pertama (berdasarkan role)
     if not bot_id:
-        bot = db.query(Bot).filter(Bot.user_id == user.id).first()
+
+        if user.role == "owner":
+            bot = db.query(Bot).filter(Bot.owner_id == user.id).first()
+        else:
+            bot = db.query(Bot).filter(Bot.user_id == user.id).first()
+
         if not bot:
             return {"error": "No bot found"}
+
         bot_id = bot.id
 
     per_page = 10
@@ -43,7 +46,6 @@ def dashboard(
         LeadDB.bot_id == bot_id
     )
 
-    # KPI
     hot = base.filter(LeadDB.status == "HOT").count()
     warm = base.filter(LeadDB.status == "WARM").count()
     cold = base.filter(LeadDB.status == "COLD").count()
@@ -66,7 +68,11 @@ def dashboard(
 
     total = query.count()
 
-    bots = db.query(Bot).filter(Bot.user_id == user.id).all()
+    # 🔥 FIX INI JUGA
+    if user.role == "owner":
+        bots = db.query(Bot).filter(Bot.owner_id == user.id).all()
+    else:
+        bots = db.query(Bot).filter(Bot.user_id == user.id).all()
 
     return templates.TemplateResponse(
         "dashboard.html",
@@ -80,7 +86,7 @@ def dashboard(
             "page": page,
             "bot_id": bot_id,
             "bots": bots,
-            "current_bot_id": bot_id,  # 🔥 penting
-            "bot_active": user.bot_active
+            "current_bot_id": bot_id,
+            "bot_active": getattr(user, "bot_active", True)
         }
     )

@@ -12,6 +12,17 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
+    bots_as_owner = relationship(
+        "Bot",
+        foreign_keys="[Bot.owner_id]",
+        back_populates="owner"
+    )
+
+    bots_as_admin = relationship(
+        "Bot",
+        foreign_keys="[Bot.user_id]",
+        back_populates="admin"
+    )
     username = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
 
