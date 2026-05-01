@@ -90,3 +90,7 @@ def dashboard(
             "bot_active": getattr(user, "bot_active", True)
         }
     )
+print("USER:", user.id, user.role)
+
+print("OWNER BOT:", db.query(Bot).filter(Bot.owner_id == user.id).all())
+print("USER BOT:", db.query(Bot).filter(Bot.user_id == user.id).all())
