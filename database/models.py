@@ -29,17 +29,30 @@ class Bot(Base):
 
     id = Column(Integer, primary_key=True)
 
-    owner_id = Column(Integer, ForeignKey("users.id"))
-    user_id = Column(Integer, ForeignKey("users.id"))   # user admin yang kelola bot
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # admin yang kelola bot
+
     name = Column(String)
 
-    telegram_token = Column(String)   # 🔥 beda tiap client
+    telegram_token = Column(String)
     is_active = Column(Boolean, default=True)
 
     created_at = Column(DateTime, server_default=func.now())
 
-    # 🔗 RELATION
-    owner = relationship("User", back_populates="bots")
+    # 🔗 RELATION (WAJIB JELAS foreign_keys)
+
+    owner = relationship(
+        "User",
+        foreign_keys=[owner_id],
+        back_populates="bots_as_owner"
+    )
+
+    admin = relationship(
+        "User",
+        foreign_keys=[user_id],
+        back_populates="bots_as_admin"
+    )
+
     leads = relationship("LeadDB", back_populates="bot", cascade="all, delete")
     settings = relationship("BotSetting", back_populates="bot", cascade="all, delete")
 
