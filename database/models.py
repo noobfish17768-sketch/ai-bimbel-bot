@@ -12,24 +12,25 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
+
+    username = Column(String, unique=True, nullable=False)
+    password = Column(String, nullable=False)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+    # 🔥 OWNER RELATION
     bots_as_owner = relationship(
         "Bot",
         foreign_keys="[Bot.owner_id]",
         back_populates="owner"
     )
 
+    # 🔥 ADMIN RELATION
     bots_as_admin = relationship(
         "Bot",
         foreign_keys="[Bot.user_id]",
         back_populates="admin"
     )
-    username = Column(String, unique=True, nullable=False)
-    password = Column(String, nullable=False)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-    # 🔗 RELATION
-    bots = relationship("Bot", back_populates="owner", cascade="all, delete")
 
 
 # =========================
@@ -41,23 +42,22 @@ class Bot(Base):
     id = Column(Integer, primary_key=True)
 
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # admin yang kelola bot
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     name = Column(String)
-
     telegram_token = Column(String)
     is_active = Column(Boolean, default=True)
 
     created_at = Column(DateTime, server_default=func.now())
 
-    # 🔗 RELATION (WAJIB JELAS foreign_keys)
-
+    # OWNER
     owner = relationship(
         "User",
         foreign_keys=[owner_id],
         back_populates="bots_as_owner"
     )
 
+    # ADMIN
     admin = relationship(
         "User",
         foreign_keys=[user_id],
@@ -66,7 +66,6 @@ class Bot(Base):
 
     leads = relationship("LeadDB", back_populates="bot", cascade="all, delete")
     settings = relationship("BotSetting", back_populates="bot", cascade="all, delete")
-
 
 # =========================
 # 📇 LEADS
