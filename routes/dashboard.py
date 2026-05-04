@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -24,12 +24,19 @@ def dashboard(
     if not hasattr(user, "id"):
         return user
 
+    
     # =========================
     # 🔍 GET BOT
     # =========================
-    bot_id = get_current_bot(request, user, db)
+    bot = None  # ✅ WAJIB ADA
+
+    try:
+        bot = get_current_bot(request, user, db)
+    except HTTPException:
+        bot = None
+
     bot_id = bot.id if bot else None
-    
+
     if not bot_id:
         # fallback: ambil bot pertama
         if user.role == "owner":
@@ -38,7 +45,7 @@ def dashboard(
             bot = db.query(Bot).filter(Bot.user_id == user.id).first()
 
         if not bot:
-            return {"error": "No bot found"}
+            return RedirectResponse("/create-bot", status_code=302)
 
         bot_id = bot.id
 
@@ -93,7 +100,7 @@ def dashboard(
     # =========================
     # 🧠 CURRENT BOT INFO
     # =========================
-    current_bot = db.query(Bot).filter(Bot.id == bot_id).first()
+    current_bot = bot if bot else db.query(Bot).filter(Bot.id == bot_id).first()
 
     return templates.TemplateResponse(
         "dashboard.html",
