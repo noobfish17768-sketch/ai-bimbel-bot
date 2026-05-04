@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Bot</title>
+</head>
+<body>
+
+<h1>Buat Bot Baru</h1>
+
+<form method="post" action="/api/bot/create">
+    <input type="text" name="name" placeholder="Nama Bot" required><br><br>
+
+    <input type="text" name="telegram_token" placeholder="Token Telegram" required><br><br>
+
+    <select name="persona_type">
+        <option value="bimbel">Bimbel</option>
+        <option value="sales">Sales</option>
+    </select><br><br>
+
+    <textarea name="system_prompt" placeholder="System Prompt"></textarea><br><br>
+
+    <button type="submit">Create Bot</button>
+</form>
+
+</body>
+</html>

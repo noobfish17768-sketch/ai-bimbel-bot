@@ -13,6 +13,7 @@ from routes.leads import router as leads_router
 from bot.webhook import router as webhook_router
 from routes.logs import router as conv_router
 from routes.admin import router as admin_router
+from routes.web_bot import router as web_bot_router
 from routes import ws
 
 print("🚀 START APP")
@@ -48,6 +49,7 @@ app.include_router(webhook_router)
 app.include_router(conv_router)
 app.include_router(admin_router)
 app.include_router(ws.router)
+app.include_router(web_bot_router)
 
 # =========================
 # STATIC
