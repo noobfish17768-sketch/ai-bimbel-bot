@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
-from database.models import LeadDB
+from database.models import LeadDB, Bot
 from core.dependencies import get_db
+from core.security import get_current_user_db
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
@@ -23,19 +24,37 @@ class LeadResponse(BaseModel):
 
 
 # =========================
-# GET LEADS (BY BOT)
+# GET LEADS (SECURE)
 # =========================
 @router.get("/")
-def get_leads(request: Request, status: Optional[str] = None, q: Optional[str] = None, page: int = 1, db=Depends(get_db)):
+def get_leads(
+    request: Request,
+    status: Optional[str] = None,
+    q: Optional[str] = None,
+    page: int = 1,
+    db=Depends(get_db),
+    user_id=Depends(get_current_user_db)
+):
 
-    bot_id = request.session.get("bot_id")   # 🔥 PENTING
+    bot_id = request.session.get("bot_id")
 
     if not bot_id:
-        return {"error": "Bot not selected"}
+        raise HTTPException(400, "Bot not selected")
+
+    # 🔒 VALIDASI BOT OWNER
+    bot = db.query(Bot).filter(
+        Bot.id == bot_id,
+        Bot.owner_id == user_id
+    ).first()
+
+    if not bot:
+        raise HTTPException(403, "Akses ditolak")
 
     per_page = 10
 
-    query = db.query(LeadDB).filter(LeadDB.bot_id == bot_id)
+    query = db.query(LeadDB).filter(
+        LeadDB.bot_id == bot.id
+    )
 
     if status:
         query = query.filter(LeadDB.status == status)
@@ -69,23 +88,37 @@ class UpdateStatusRequest(BaseModel):
 
 
 @router.post("/update-status")
-def update_status(request: Request, data: UpdateStatusRequest, db=Depends(get_db)):
+def update_status(
+    request: Request,
+    data: UpdateStatusRequest,
+    db=Depends(get_db),
+    user_id=Depends(get_current_user_db)
+):
 
     bot_id = request.session.get("bot_id")
 
     if not bot_id:
-        return {"error": "Bot not selected"}
+        raise HTTPException(400, "Bot not selected")
 
     if data.status not in ["HOT", "WARM", "COLD"]:
-        return {"error": "Invalid status"}
+        raise HTTPException(400, "Invalid status")
+
+    # 🔒 VALIDASI BOT
+    bot = db.query(Bot).filter(
+        Bot.id == bot_id,
+        Bot.owner_id == user_id
+    ).first()
+
+    if not bot:
+        raise HTTPException(403, "Akses ditolak")
 
     lead = db.query(LeadDB).filter(
         LeadDB.id == data.lead_id,
-        LeadDB.bot_id == bot_id
+        LeadDB.bot_id == bot.id
     ).first()
 
     if not lead:
-        return {"error": "Lead not found"}
+        raise HTTPException(404, "Lead not found")
 
     lead.status = data.status
     db.commit()
@@ -97,20 +130,34 @@ def update_status(request: Request, data: UpdateStatusRequest, db=Depends(get_db
 # DELETE LEAD
 # =========================
 @router.delete("/{lead_id}")
-def delete_lead(lead_id: int, request: Request, db=Depends(get_db)):
+def delete_lead(
+    lead_id: int,
+    request: Request,
+    db=Depends(get_db),
+    user_id=Depends(get_current_user_db)
+):
 
     bot_id = request.session.get("bot_id")
 
     if not bot_id:
-        return {"error": "Bot not selected"}
+        raise HTTPException(400, "Bot not selected")
+
+    # 🔒 VALIDASI BOT
+    bot = db.query(Bot).filter(
+        Bot.id == bot_id,
+        Bot.owner_id == user_id
+    ).first()
+
+    if not bot:
+        raise HTTPException(403, "Akses ditolak")
 
     lead = db.query(LeadDB).filter(
         LeadDB.id == lead_id,
-        LeadDB.bot_id == bot_id
+        LeadDB.bot_id == bot.id
     ).first()
 
     if not lead:
-        return {"error": "Not found"}
+        raise HTTPException(404, "Lead not found")
 
     db.delete(lead)
     db.commit()

@@ -18,12 +18,15 @@
             padding:30px;
             width:300px;
             border-radius:10px;
+            box-shadow:0 4px 10px rgba(0,0,0,0.05);
         }
 
         input {
             width:100%;
             padding:10px;
             margin-bottom:10px;
+            border:1px solid #ddd;
+            border-radius:6px;
         }
 
         button {
@@ -32,11 +35,18 @@
             background:#3498db;
             border:none;
             color:white;
+            border-radius:6px;
+            cursor:pointer;
+        }
+
+        button:hover {
+            background:#2980b9;
         }
 
         .error {
             color:red;
             font-size:12px;
+            margin-bottom:10px;
         }
     </style>
 </head>
@@ -51,10 +61,23 @@
         <div class="error">{{ error }}</div>
     {% endif %}
 
-    <form method="post">
-        <input name="username" placeholder="username">
-        <input name="password" type="password" placeholder="password">
-        <button>Login</button>
+    <form method="post" action="/login" autocomplete="off">
+        <input 
+            name="username" 
+            placeholder="username" 
+            required 
+            autocomplete="username"
+        >
+
+        <input 
+            name="password" 
+            type="password" 
+            placeholder="password" 
+            required 
+            autocomplete="current-password"
+        >
+
+        <button type="submit">Login</button>
     </form>
 
 </div>

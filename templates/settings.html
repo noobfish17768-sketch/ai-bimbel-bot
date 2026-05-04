@@ -35,15 +35,15 @@
 <body>
 
 <h2>⚙️ Bot Settings</h2>
-<div class="topbar">
 
+<div class="topbar">
     <div>
-        <a href="/dashboard">Dashboard</a> |
-        <a href="/conversations">Chats</a> |
+        <a href="/dashboard?bot_id={{ current_bot_id }}">Dashboard</a> |
+        <a href="/conversations?bot_id={{ current_bot_id }}">Chats</a> |
         <a href="/logout">Logout</a>
     </div>
-    
 </div>
+
 <!-- ADD / UPDATE -->
 <div class="card">
     <h3>Tambah / Update Setting</h3>
@@ -70,8 +70,15 @@ async function saveSetting() {
     const key = document.getElementById("key").value;
     const value = document.getElementById("value").value;
 
+    const botId = new URLSearchParams(window.location.search).get("bot_id");
+
     if (!key || !value) {
         alert("Isi key & value dulu");
+        return;
+    }
+
+    if (!botId) {
+        alert("Bot belum dipilih");
         return;
     }
 
@@ -81,7 +88,11 @@ async function saveSetting() {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ key, value })
+            body: JSON.stringify({
+                key,
+                value,
+                bot_id: botId
+            })
         });
 
         const data = await res.json();

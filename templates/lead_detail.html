@@ -11,28 +11,38 @@
 
     <div class="sidebar">
         <h2>CRM</h2>
-        <a href="/dashboard">Dashboard</a>
-        <a href="/conversations">Chats</a>
-        <a href="/settings">Settings</a>
+        <a href="/dashboard?bot_id={{ lead.bot_id }}">Dashboard</a>
+        <a href="/conversations?bot_id={{ lead.bot_id }}">Chats</a>
+        <a href="/settings?bot_id={{ lead.bot_id }}">Settings</a>
     </div>
 
     <div class="main">
 
         <h2>Lead Detail</h2>
 
+        <!-- INFO -->
         <div class="card">
-            <p>Nama: {{ lead.nama_orangtua }}</p>
-            <p>Anak: {{ lead.nama_anak }}</p>
-            <p>Umur: {{ lead.umur_anak }}</p>
-            <p>WA: {{ lead.whatsapp }}</p>
-            <p>Status: {{ lead.status }}</p>
-            <p>Score: {{ lead.lead_score }}</p>
+            <p><b>Nama:</b> {{ lead.nama_orangtua or "-" }}</p>
+            <p><b>Anak:</b> {{ lead.nama_anak or "-" }}</p>
+            <p><b>Umur:</b> {{ lead.umur_anak or "-" }}</p>
+            <p><b>WA:</b> {{ lead.whatsapp }}</p>
+            <p><b>Status:</b> {{ lead.status }}</p>
+            <p><b>Score:</b> {{ lead.lead_score }}</p>
         </div>
 
+        <!-- NOTES -->
         <div class="card">
-            <form method="post">
-                <textarea name="notes">{{ lead.notes }}</textarea>
-                <button type="submit">Save</button>
+            <form method="post" action="/lead/{{ lead.id }}/notes">
+                
+                <textarea 
+                    name="notes" 
+                    rows="4"
+                    style="width:100%; padding:10px; border-radius:6px; border:1px solid #ddd;"
+                >{{ lead.notes or "" }}</textarea>
+
+                <br><br>
+
+                <button type="submit">💾 Save Notes</button>
             </form>
         </div>
 

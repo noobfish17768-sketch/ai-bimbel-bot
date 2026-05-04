@@ -1,9 +1,32 @@
 from database.database import SessionLocal
-from database.models import BotSetting
+from database.models import BotSetting, Bot
 
 db = SessionLocal()
 
 def seed():
+    # =========================
+    # 🔍 AMBIL BOT PERTAMA
+    # =========================
+    bots = db.query(Bot).all()
+
+    for bot in bots:
+        for key, value in settings:
+            exists = db.query(BotSetting).filter_by(
+                bot_id=bot.id,
+                key=key
+            ).first()
+
+            if not exists:
+                db.add(BotSetting(
+                    bot_id=bot.id,
+                    key=key,
+                    value=value
+                ))
+
+    if not bot:
+        print("❌ Tidak ada bot, seed dibatalkan")
+        return
+
     settings = [
         ("bot_status", "ON"),
         ("greeting", "Halo kak 😊"),
@@ -11,19 +34,20 @@ def seed():
 
     for key, value in settings:
         exists = db.query(BotSetting).filter_by(
-            user_id="1",
+            bot_id=bot.id,
             key=key
         ).first()
 
         if not exists:
             db.add(BotSetting(
-                user_id="1",
+                bot_id=bot.id,
                 key=key,
                 value=value
             ))
 
     db.commit()
-    print("✅ Seed done")
+    print(f"✅ Seed done for bot_id={bot.id}")
+
 
 if __name__ == "__main__":
     seed()

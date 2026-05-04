@@ -16,7 +16,7 @@ def get_db() -> Generator:
 
 
 # =========================
-# CURRENT USER (FULL VALIDATION)
+# CURRENT USER
 # =========================
 def get_current_user(
     request: Request,
@@ -26,12 +26,42 @@ def get_current_user(
     user_id = request.session.get("user_id")
 
     if not user_id:
+        print("⚠️ Unauthorized: no session")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     user = db.query(User).filter(User.id == int(user_id)).first()
 
     if not user:
+        print(f"⚠️ Invalid session user_id={user_id}")
         request.session.clear()
         raise HTTPException(status_code=401, detail="Invalid session")
+
+    return user
+
+
+# =========================
+# CURRENT USER ID (LIGHTWEIGHT)
+# =========================
+def get_current_user_id(
+    request: Request
+) -> int:
+
+    user_id = request.session.get("user_id")
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    return int(user_id)
+
+
+# =========================
+# OPTIONAL: ADMIN CHECK
+# =========================
+def require_admin(
+    user: User = Depends(get_current_user)
+) -> User:
+
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
 
     return user

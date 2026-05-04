@@ -9,9 +9,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # =========================
-# FIX PYTHON PATH (IMPORTANT)
+# FIX PYTHON PATH (SAFE)
 # =========================
-sys.path.append(os.getcwd())
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+sys.path.append(PROJECT_ROOT)
 
 # =========================
 # ALEMBIC CONFIG
@@ -38,7 +40,7 @@ if config.config_file_name is not None:
 # IMPORT MODELS (IMPORTANT)
 # =========================
 from database.database import Base
-import database.models  # ensure all models loaded
+import database.models
 
 target_metadata = Base.metadata
 
@@ -54,6 +56,8 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=True,
+        compare_server_default=True  # 🔥 NEW
     )
 
     with context.begin_transaction():
@@ -74,7 +78,9 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            compare_type=True  # 🔥 IMPORTANT FIX
+            compare_type=True,
+            compare_server_default=True,  # 🔥 NEW
+            render_as_batch=True  # 🔥 FIX SQLite migration issue
         )
 
         with context.begin_transaction():

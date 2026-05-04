@@ -1,44 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Admin Management</title>
     <link rel="stylesheet" href="/static/style.css">
-
-    <style>
-        .card {
-            background:white;
-            padding:20px;
-            border-radius:10px;
-            margin-bottom:20px;
-        }
-
-        input {
-            display:block;
-            margin-bottom:10px;
-            padding:10px;
-            width:250px;
-        }
-
-        button {
-            padding:10px 15px;
-            border:none;
-            border-radius:5px;
-            background:#3498db;
-            color:white;
-            cursor:pointer;
-        }
-
-        table {
-            width:100%;
-            background:white;
-            border-collapse:collapse;
-        }
-
-        th, td {
-            padding:10px;
-            border-bottom:1px solid #eee;
-        }
-    </style>
 </head>
 
 <body>
@@ -52,7 +17,7 @@
     <h3>Tambah Admin</h3>
 
     <input id="username" placeholder="Username">
-    <input id="password" placeholder="Password" type="password">
+    <input id="password" type="password" placeholder="Password">
     <input id="telegram_id" placeholder="Telegram ID">
 
     <button onclick="createAdmin()">Create Admin</button>
@@ -70,6 +35,7 @@
             <th>Telegram ID</th>
             <th>Role</th>
             <th>Status Bot</th>
+            <th>Aksi</th>
         </tr>
 
         {% for u in users %}
@@ -78,6 +44,9 @@
             <td>{{ u.telegram_id or "-" }}</td>
             <td>{{ u.role }}</td>
             <td>{{ "ON" if u.bot_active else "OFF" }}</td>
+            <td>
+                <button onclick="deleteAdmin('{{ u.id }}')">Hapus</button>
+            </td>
         </tr>
         {% endfor %}
     </table>
@@ -89,57 +58,62 @@
 <script>
 async function createAdmin() {
 
-    const username = document.getElementById("username").value.trim()
-    const password = document.getElementById("password").value.trim()
-    const telegram_id = document.getElementById("telegram_id").value.trim()
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value.trim();
+    const telegram_id = document.getElementById("telegram_id").value.trim();
 
-    // 🔥 VALIDASI
     if (!username || !password || !telegram_id) {
-        alert("Semua field wajib diisi")
-        return
+        alert("Semua field wajib diisi");
+        return;
     }
 
     try {
         const res = await fetch("/api/admin/create", {
             method: "POST",
-            headers: {"Content-Type":"application/json"},
+            headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
-                username,
-                password,
-                telegram_id
+                username: username,
+                password: password,
+                telegram_id: telegram_id
             })
-        })
+        });
 
-        const data = await res.json()
+        const data = await res.json();
 
         if (data.success) {
-            alert("Admin berhasil dibuat")
-            location.reload()
+            alert("Admin berhasil dibuat");
+            location.reload();
         } else {
-            alert(data.error || "Gagal membuat admin")
+            alert(data.error || "Gagal membuat admin");
         }
 
     } catch (err) {
-        console.error(err)
-        alert("Server error")
+        console.error(err);
+        alert("Server error");
     }
 }
 
 async function deleteAdmin(id) {
 
-    if(!confirm("Yakin mau hapus admin ini?")) return
+    if (!confirm("Yakin mau hapus admin ini?")) return;
 
-    const res = await fetch(`/api/admin/${id}`, {
-        method: "DELETE"
-    })
+    try {
+        const res = await fetch("/api/admin/" + id, {
+            method: "DELETE"
+        });
 
-    const data = await res.json()
+        const data = await res.json();
 
-    if(data.success){
-        alert("Admin deleted")
-        location.reload()
-    } else {
-        alert(data.detail || "Error")
+        if (data.success) {
+            alert("Admin deleted");
+            location.reload();
+        } else {
+            alert(data.detail || "Error");
+        }
+
+    } catch (err) {
+        console.error(err);
+        alert("Server error");
     }
 }
 </script>

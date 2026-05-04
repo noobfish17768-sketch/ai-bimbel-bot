@@ -5,14 +5,14 @@ from pydantic import BaseModel
 
 from database.models import User
 from core.dependencies import get_db
-from core.security import get_current_user_web, hash_password
+from core.security import get_current_user_web, get_current_user_db, hash_password
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
 
 # =========================
-# ADMIN PAGE
+# ADMIN PAGE (WEB)
 # =========================
 @router.get("/admin")
 def admin_page(request: Request, db=Depends(get_db)):
@@ -37,50 +37,45 @@ def admin_page(request: Request, db=Depends(get_db)):
 
 
 # =========================
-# CREATE ADMIN
+# CREATE ADMIN (API)
 # =========================
 class CreateAdmin(BaseModel):
     username: str
     password: str
-    telegram_id: str
 
 
 @router.post("/api/admin/create")
-def create_admin(request: Request, data: CreateAdmin, db=Depends(get_db)):
-
-    user = get_current_user_web(request)
-
-    if not hasattr(user, "id"):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def create_admin(
+    data: CreateAdmin,
+    user: User = Depends(get_current_user_db),
+    db=Depends(get_db)
+):
 
     if user.role != "superadmin":
         raise HTTPException(status_code=403, detail="Forbidden")
-
-    # validasi input
-    if not data.telegram_id:
-        raise HTTPException(status_code=400, detail="telegram_id wajib diisi")
 
     # cek username
     existing = db.query(User).filter(User.username == data.username).first()
     if existing:
         raise HTTPException(status_code=400, detail="Username sudah dipakai")
 
-    # cek telegram_id
-    existing_tg = db.query(User).filter(User.telegram_id == data.telegram_id).first()
-    if existing_tg:
-        raise HTTPException(status_code=400, detail="Telegram ID sudah dipakai")
-
     new_user = User(
         username=data.username,
         password=hash_password(data.password),
-        telegram_id=data.telegram_id,
-        role="admin",
-        bot_active=True
+        role="admin"
     )
 
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+
+        print(f"✅ Admin created: {new_user.username}")
+
+    except Exception as e:
+        db.rollback()
+        print("❌ CREATE ADMIN ERROR:", e)
+        raise HTTPException(status_code=500, detail="Gagal create admin")
 
     return {"success": True}
 
@@ -89,17 +84,15 @@ def create_admin(request: Request, data: CreateAdmin, db=Depends(get_db)):
 # DELETE ADMIN
 # =========================
 @router.post("/api/admin/delete/{user_id}")
-def delete_admin(user_id: int, request: Request, db=Depends(get_db)):
-
-    user = get_current_user_web(request)
-
-    if not hasattr(user, "id"):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def delete_admin(
+    user_id: int,
+    user: User = Depends(get_current_user_db),
+    db=Depends(get_db)
+):
 
     if user.role != "superadmin":
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    # ❌ jangan hapus diri sendiri
     if user.id == user_id:
         raise HTTPException(status_code=400, detail="Tidak bisa hapus diri sendiri")
 
@@ -108,11 +101,18 @@ def delete_admin(user_id: int, request: Request, db=Depends(get_db)):
     if not target:
         raise HTTPException(status_code=404, detail="User tidak ditemukan")
 
-    # ❌ jangan hapus superadmin lain (optional safety)
     if target.role == "superadmin":
         raise HTTPException(status_code=400, detail="Tidak bisa hapus superadmin")
 
-    db.delete(target)
-    db.commit()
+    try:
+        db.delete(target)
+        db.commit()
+
+        print(f"🗑️ Admin deleted: {target.username}")
+
+    except Exception as e:
+        db.rollback()
+        print("❌ DELETE ADMIN ERROR:", e)
+        raise HTTPException(status_code=500, detail="Gagal delete admin")
 
     return {"success": True}

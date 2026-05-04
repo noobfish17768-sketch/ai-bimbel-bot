@@ -1,16 +1,13 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-import os
-from dotenv import load_dotenv
+from core.config import settings
 
-load_dotenv()
+print("🛢️ DATABASE CONNECTING...")
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = settings.DATABASE_URL
 
 if not DATABASE_URL:
     raise Exception("❌ DATABASE_URL tidak ditemukan")
-
-print("🛢️ DATABASE CONNECTING...")
 
 # =========================
 # FIX POSTGRES URL (Railway)
@@ -19,15 +16,27 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # =========================
+# SSL CONFIG (SMART)
+# =========================
+connect_args = {}
+
+if "postgresql" in DATABASE_URL:
+    if settings.ENV == "production":
+        connect_args = {"sslmode": "require"}
+    else:
+        connect_args = {}
+
+# =========================
 # ENGINE
 # =========================
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=300,
-    pool_size=5,
-    max_overflow=10,
-    connect_args={"sslmode": "require"} if "postgresql" in DATABASE_URL else {}
+    pool_size=10,         # 🔥 naik dari 5
+    max_overflow=20,      # 🔥 naik dari 10
+    echo=settings.DEBUG,  # 🔥 log query kalau dev
+    connect_args=connect_args
 )
 
 # =========================
@@ -44,4 +53,4 @@ SessionLocal = sessionmaker(
 # =========================
 Base = declarative_base()
 
-print("✅ DATABASE READY")
+print(f"✅ DATABASE READY ({settings.ENV})")

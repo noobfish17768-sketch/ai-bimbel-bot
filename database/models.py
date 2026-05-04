@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, UniqueConstraint, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -16,7 +16,7 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
 
-    role = Column(String, default="admin")  # 🔥 INI WAJIB ADA
+    role = Column(String, default="admin")
 
     created_at = Column(DateTime, server_default=func.now())
 
@@ -34,7 +34,7 @@ class User(Base):
 
 
 # =========================
-# 🤖 BOT (MULTI BOT CORE)
+# 🤖 BOT (1 BOT = 1 PERSONA)
 # =========================
 class Bot(Base):
     __tablename__ = "bots"
@@ -45,19 +45,21 @@ class Bot(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     name = Column(String)
-    telegram_token = Column(String)
+    telegram_token = Column(String)  # 🔥 keep this name CONSISTENT everywhere
+
+    persona_type = Column(String, default="bimbel")  # 🔥 tambah default
+    system_prompt = Column(Text)
+
     is_active = Column(Boolean, default=True)
 
     created_at = Column(DateTime, server_default=func.now())
 
-    # OWNER
     owner = relationship(
         "User",
         foreign_keys=[owner_id],
         back_populates="bots_as_owner"
     )
 
-    # ADMIN
     admin = relationship(
         "User",
         foreign_keys=[user_id],
@@ -66,6 +68,7 @@ class Bot(Base):
 
     leads = relationship("LeadDB", back_populates="bot", cascade="all, delete")
     settings = relationship("BotSetting", back_populates="bot", cascade="all, delete")
+
 
 # =========================
 # 📇 LEADS
@@ -84,7 +87,7 @@ class LeadDB(Base):
     nama_anak = Column(String)
     umur_anak = Column(String)
 
-    status = Column(String, default="COLD")
+    status = Column(String, default="COLD", index=True)
     notes = Column(Text)
 
     created_at = Column(DateTime, server_default=func.now())
@@ -92,8 +95,15 @@ class LeadDB(Base):
 
     followup_count = Column(Integer, default=0)
     lead_score = Column(Integer, default=0)
+    is_human_takeover = Column(Boolean, default=False)
+    ai_enabled = Column(Boolean, default=True)
 
-    # 🔗 RELATION
+    # 🔥 prevent duplicate lead per bot
+    __table_args__ = (
+        UniqueConstraint('bot_id', 'telegram_id', name='unique_bot_telegram'),
+        Index('idx_bot_lastchat', 'bot_id', 'last_chat')  # 🔥 NEW
+    )
+
     bot = relationship("Bot", back_populates="leads")
     conversations = relationship("Conversation", back_populates="lead", cascade="all, delete-orphan")
 
@@ -106,14 +116,16 @@ class Conversation(Base):
 
     id = Column(Integer, primary_key=True)
 
-    bot_id = Column(Integer, ForeignKey("bots.id"))
-    lead_id = Column(Integer, ForeignKey("leads.id"))
+    bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
 
     message = Column(Text)
     response = Column(Text)
 
-    created_at = Column(DateTime, server_default=func.now())
+    created_at = Column(DateTime, server_default=func.now(), index=True)
 
+    # 🔥 RELATION TAMBAHAN (penting)
+    bot = relationship("Bot")
     lead = relationship("LeadDB", back_populates="conversations")
 
 
@@ -125,7 +137,7 @@ class BotSetting(Base):
 
     id = Column(Integer, primary_key=True)
 
-    bot_id = Column(Integer, ForeignKey("bots.id"))
+    bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
 
     key = Column(String)
     value = Column(String)

@@ -2,50 +2,195 @@
 <html>
 <head>
     <title>Inbox</title>
-    <style>
-        body { margin:0; display:flex; font-family:Arial; }
-
-        .sidebar {
-            width:300px;
-            background:#111;
-            color:white;
-            height:100vh;
-            overflow:auto;
-        }
-
-        .user {
-            padding:15px;
-            border-bottom:1px solid #333;
-            cursor:pointer;
-        }
-
-        .user:hover { background:#222; }
-
-        .main {
-            flex:1;
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            color:gray;
-        }
-    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body>
+<body class="bg-gray-100">
 
-<div class="sidebar">
-    <h3 style="padding:15px;">Inbox</h3>
+<div class="flex h-screen">
 
-    {% for u in users %}
-    <div class="user" onclick="window.location='/chat/{{u}}'">
-        👤 {{ u }}
+<!-- =========================
+👥 SIDEBAR
+========================= -->
+<div class="w-80 bg-white border-r overflow-y-auto">
+
+    <div class="p-4 border-b font-bold">
+        💬 Inbox
     </div>
+
+    {% for lead in leads %}
+    <a href="/inbox?bot_id={{ bot_id }}&lead_id={{ lead.id }}"
+       class="block p-4 border-b hover:bg-gray-100 
+       {% if active_lead and active_lead.id == lead.id %}bg-blue-50{% endif %}">
+
+        <div class="flex justify-between">
+            <span class="font-semibold">
+                {{ lead.nama_orangtua or "User" }}
+            </span>
+
+            {% if lead.status == "HOT" %}
+                <span class="text-red-500 text-xs">HOT</span>
+            {% elif lead.status == "WARM" %}
+                <span class="text-yellow-500 text-xs">WARM</span>
+            {% else %}
+                <span class="text-gray-400 text-xs">COLD</span>
+            {% endif %}
+        </div>
+
+        <div class="text-xs text-gray-500">
+            {{ lead.whatsapp or lead.telegram_id }}
+        </div>
+    </a>
     {% endfor %}
 </div>
 
-<div class="main">
-    Pilih chat
+<!-- =========================
+💬 CHAT AREA
+========================= -->
+<div class="flex-1 flex flex-col">
+
+    {% if active_lead %}
+
+    <div class="p-4 border-b bg-white flex justify-between items-center">
+
+        <div>
+            <div class="font-bold">
+                {{ active_lead.nama_orangtua or "User" }}
+            </div>
+            <div class="text-xs text-gray-500">
+                {{ active_lead.whatsapp or active_lead.telegram_id }}
+            </div>
+        </div>
+
+        <div class="text-right text-sm">
+            <div>Score: <b>{{ active_lead.lead_score }}</b></div>
+
+            {% if active_lead.ai_enabled %}
+                <div class="text-green-500 text-xs">AI ON</div>
+            {% else %}
+                <div class="text-red-500 text-xs">AI OFF</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div id="chat-box" class="flex-1 p-4 overflow-y-auto space-y-3">
+
+        {% for chat in chats %}
+
+            {% if chat.message %}
+            <div class="flex justify-start">
+                <div class="bg-gray-200 p-3 rounded-lg max-w-xs">
+                    {{ chat.message }}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if chat.response %}
+            <div class="flex justify-end">
+                <div class="bg-blue-500 text-white p-3 rounded-lg max-w-xs">
+                    {{ chat.response }}
+                </div>
+            </div>
+            {% endif %}
+
+        {% endfor %}
+
+    </div>
+
+    <div id="typing-indicator" class="text-sm text-gray-500 px-4 pb-2 hidden">
+        AI sedang mengetik...
+    </div>
+
+    <form 
+        action="/api/inbox/reply" 
+        method="post"
+        class="p-3 border-t bg-white flex gap-2"
+    >
+        <input type="hidden" name="lead_id" value="{{ active_lead.id }}">
+
+        <input 
+            id="message-input"
+            type="text" 
+            name="message"
+            placeholder="Tulis pesan..."
+            class="flex-1 border p-2 rounded"
+            autocomplete="off"
+            required
+        >
+
+        <button class="bg-blue-500 text-white px-4 rounded">
+            Kirim
+        </button>
+    </form>
+
+    {% else %}
+
+    <div class="flex-1 flex items-center justify-center text-gray-400">
+        Pilih chat dulu 👈
+    </div>
+
+    {% endif %}
 </div>
+
+</div>
+
+<script>
+
+let leadId = "{{ active_lead.id if active_lead else '' }}";
+let ws = null;
+
+if (leadId) {
+
+    const protocol = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${protocol}://${location.host}/ws/${leadId}`);
+
+    const chatBox = document.getElementById("chat-box");
+    const typing = document.getElementById("typing-indicator");
+
+    ws.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "typing") {
+            if (typing) typing.classList.remove("hidden");
+            return;
+        }
+
+        if (data.type === "typing_stop") {
+            if (typing) typing.classList.add("hidden");
+            return;
+        }
+
+        if (data.type === "message") {
+
+            if (typing) typing.classList.add("hidden");
+
+            let wrapper = document.createElement("div");
+
+            if (data.from === "user") {
+                wrapper.innerHTML = `
+                    <div class="flex justify-start">
+                        <div class="bg-gray-200 p-3 rounded-lg max-w-xs">
+                            ${data.text}
+                        </div>
+                    </div>
+                `;
+            } else {
+                wrapper.innerHTML = `
+                    <div class="flex justify-end">
+                        <div class="bg-green-500 text-white p-3 rounded-lg max-w-xs">
+                            ${data.text}
+                        </div>
+                    </div>
+                `;
+            }
+
+            chatBox.appendChild(wrapper);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    };
+}
+
+</script>
 
 </body>
 </html>

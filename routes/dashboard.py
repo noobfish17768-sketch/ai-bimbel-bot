@@ -24,16 +24,13 @@ def dashboard(
     if not hasattr(user, "id"):
         return user
 
-    print("USER:", user.id, user.role)
-
-    print("OWNER BOT:", db.query(Bot).filter(Bot.owner_id == user.id).all())
-    print("USER BOT:", db.query(Bot).filter(Bot.user_id == user.id).all())
-
+    # =========================
+    # 🔍 GET BOT
+    # =========================
     bot_id = get_current_bot(request, user)
 
-    # fallback bot pertama (berdasarkan role)
     if not bot_id:
-
+        # fallback: ambil bot pertama
         if user.role == "owner":
             bot = db.query(Bot).filter(Bot.owner_id == user.id).first()
         else:
@@ -44,17 +41,23 @@ def dashboard(
 
         bot_id = bot.id
 
-    per_page = 10
-
+    # =========================
+    # 📊 BASE QUERY (FIX)
+    # =========================
     base = db.query(LeadDB).filter(
-        LeadDB.owner_id == user.id,
         LeadDB.bot_id == bot_id
     )
 
+    # =========================
+    # 📊 STATS
+    # =========================
     hot = base.filter(LeadDB.status == "HOT").count()
     warm = base.filter(LeadDB.status == "WARM").count()
     cold = base.filter(LeadDB.status == "COLD").count()
 
+    # =========================
+    # 🔎 FILTER
+    # =========================
     query = base
 
     if status:
@@ -66,6 +69,11 @@ def dashboard(
             LeadDB.whatsapp.ilike(f"%{q}%")
         )
 
+    # =========================
+    # 📄 PAGINATION
+    # =========================
+    per_page = 10
+
     leads = query.order_by(LeadDB.created_at.desc()) \
         .offset((page - 1) * per_page) \
         .limit(per_page) \
@@ -73,11 +81,18 @@ def dashboard(
 
     total = query.count()
 
-    # 🔥 FIX INI JUGA
+    # =========================
+    # 🤖 BOT LIST
+    # =========================
     if user.role == "owner":
         bots = db.query(Bot).filter(Bot.owner_id == user.id).all()
     else:
         bots = db.query(Bot).filter(Bot.user_id == user.id).all()
+
+    # =========================
+    # 🧠 CURRENT BOT INFO
+    # =========================
+    current_bot = db.query(Bot).filter(Bot.id == bot_id).first()
 
     return templates.TemplateResponse(
         "dashboard.html",
@@ -92,6 +107,7 @@ def dashboard(
             "bot_id": bot_id,
             "bots": bots,
             "current_bot_id": bot_id,
-            "bot_active": getattr(user, "bot_active", True)
+            "current_bot": current_bot,
+            "bot_active": current_bot.is_active if current_bot else True
         }
     )

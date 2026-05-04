@@ -1,9 +1,9 @@
 from passlib.context import CryptContext
-from fastapi import Request, HTTPException
+from fastapi import Request, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 
-from database.database import SessionLocal
 from database.models import User, Bot
+from core.dependencies import get_db
 
 
 # =========================
@@ -24,97 +24,89 @@ def hash_password(password: str) -> str:
 
 
 # =========================
-# BASIC (LEGACY - KEEP)
+# SESSION BASIC
 # =========================
-def get_current_user(request: Request):
+def get_session_user_id(request: Request) -> int:
     user_id = request.session.get("user_id")
-    return int(user_id) if user_id else None
 
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
-def require_user(request: Request):
-    user_id = get_current_user(request)
-    return user_id if user_id else None
-
-
-# =========================
-# 🔥 STRONG VERSION (API)
-# =========================
-def get_current_user_db(request: Request) -> User:
-
-    db = SessionLocal()
-
-    try:
-        user_id = request.session.get("user_id")
-
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-
-        user = db.query(User).filter(User.id == int(user_id)).first()
-
-        if not user:
-            request.session.clear()
-            raise HTTPException(status_code=401, detail="Invalid session")
-
-        return user
-
-    finally:
-        db.close()
+    return int(user_id)
 
 
 # =========================
-# 🔥 WEB VERSION (REDIRECT)
+# API VERSION (CLEAN)
 # =========================
-def get_current_user_web(request: Request) -> User:
+def get_current_user_db(
+    request: Request,
+    db=Depends(get_db)
+) -> User:
 
-    db = SessionLocal()
+    user_id = request.session.get("user_id")
 
-    try:
-        user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
-        if not user_id:
-            return RedirectResponse("/login", status_code=302)
+    user = db.query(User).filter(User.id == int(user_id)).first()
 
-        user = db.query(User).filter(User.id == int(user_id)).first()
+    if not user:
+        request.session.clear()
+        raise HTTPException(status_code=401, detail="Invalid session")
 
-        if not user:
-            request.session.clear()
-            return RedirectResponse("/login", status_code=302)
-
-        return user
-
-    finally:
-        db.close()
+    return user
 
 
 # =========================
-# 🔥 MULTI BOT (UPGRADE)
+# WEB VERSION (REDIRECT)
 # =========================
-def get_current_bot(request: Request, user: User = None):
+def get_current_user_web(
+    request: Request,
+    db=Depends(get_db)
+):
+
+    user_id = request.session.get("user_id")
+
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
+
+    user = db.query(User).filter(User.id == int(user_id)).first()
+
+    if not user:
+        request.session.clear()
+        return RedirectResponse("/login", status_code=302)
+
+    return user
+
+
+# =========================
+# MULTI BOT ACCESS
+# =========================
+def get_current_bot(
+    request: Request,
+    user: User = Depends(get_current_user_db),
+    db=Depends(get_db)
+) -> Bot:
+
     bot_id = request.query_params.get("bot_id")
 
     if not bot_id:
-        return None
+        raise HTTPException(status_code=400, detail="bot_id required")
 
     try:
         bot_id = int(bot_id)
     except:
-        return None
+        raise HTTPException(status_code=400, detail="Invalid bot_id")
 
-    if not user:
-        return bot_id
+    bot = db.query(Bot).filter(
+        Bot.id == bot_id,
+        (
+            (Bot.owner_id == user.id) |
+            (Bot.user_id == user.id)
+        )
+    ).first()
 
-    db = SessionLocal()
-    try:
+    if not bot:
+        raise HTTPException(status_code=403, detail="Access denied")
 
-        bot = db.query(Bot).filter(
-            Bot.id == bot_id,
-            (
-                (Bot.owner_id == user.id) |
-                (Bot.user_id == user.id)
-            )
-        ).first()
-
-        return bot.id if bot else None
-
-    finally:
-        db.close()
+    return bot

@@ -14,7 +14,7 @@ bot = Bot(token=TELEGRAM_TOKEN) if TELEGRAM_TOKEN else None
 
 
 # =========================
-# DELAY RULE
+# DELAY RULE (MENIT)
 # =========================
 def get_delay(score: int) -> int:
     if score < 30:
@@ -98,9 +98,17 @@ def run_followup():
             for lead in leads:
                 try:
                     # =========================
-                    # VALIDATION
+                    # 🔒 VALIDATION
                     # =========================
                     if not lead.telegram_id:
+                        continue
+
+                    # ❗ NEW: hormati AI toggle
+                    if hasattr(lead, "ai_enabled") and not lead.ai_enabled:
+                        continue
+
+                    # ❗ NEW: hormati human takeover
+                    if getattr(lead, "is_human_takeover", False):
                         continue
 
                     if not can_send(lead):
@@ -114,7 +122,7 @@ def run_followup():
                     # =========================
                     msg = generate_followup(lead)
 
-                    print(f"📤 SEND FOLLOWUP -> {lead.telegram_id} | SCORE {lead.lead_score}")
+                    print(f"📤 FOLLOWUP -> {lead.telegram_id} | SCORE {lead.lead_score}")
 
                     bot.send_message(
                         chat_id=lead.telegram_id,
@@ -126,6 +134,9 @@ def run_followup():
                     # =========================
                     lead.followup_count = (lead.followup_count or 0) + 1
                     lead.last_followup = datetime.utcnow()
+
+                    # ❗ IMPORTANT: biar gak double trigger
+                    lead.last_chat = datetime.utcnow()
 
                     db.commit()
 

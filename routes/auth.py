@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from database.models import User
-from core.security import verify_password, hash_password
+from core.security import verify_password
 from core.dependencies import get_db
 
 router = APIRouter()
@@ -39,14 +39,34 @@ async def login(request: Request, db=Depends(get_db)):
 
     user = db.query(User).filter_by(username=username).first()
 
-    if user and verify_password(password, user.password):
-        request.session["user_id"] = user.id
-        return RedirectResponse("/dashboard", status_code=302)
+    if not user:
+        print(f"❌ LOGIN FAIL (user not found): {username}")
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Username atau password salah"}
+        )
 
-    return templates.TemplateResponse(
-        "login.html",
-        {"request": request, "error": "Username atau password salah"}
-    )
+    # OPTIONAL: kalau nanti ada field is_active
+    # if not user.is_active:
+    #     return templates.TemplateResponse(
+    #         "login.html",
+    #         {"request": request, "error": "Akun nonaktif"}
+    #     )
+
+    if not verify_password(password, user.password):
+        print(f"❌ LOGIN FAIL (wrong password): {username}")
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Username atau password salah"}
+        )
+
+    # 🔥 SUCCESS LOGIN
+    request.session.clear()  # penting (anti session fixation)
+    request.session["user_id"] = user.id
+
+    print(f"✅ LOGIN SUCCESS: {username}")
+
+    return RedirectResponse("/dashboard", status_code=302)
 
 
 # =========================
@@ -54,5 +74,10 @@ async def login(request: Request, db=Depends(get_db)):
 # =========================
 @router.get("/logout")
 def logout(request: Request):
+    user_id = request.session.get("user_id")
+
     request.session.clear()
+
+    print(f"👋 LOGOUT: {user_id}")
+
     return RedirectResponse("/login", status_code=302)

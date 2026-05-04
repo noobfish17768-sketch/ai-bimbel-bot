@@ -7,12 +7,12 @@ body {
 /* LAYOUT */
 .layout {
     display: flex;
+    min-height: 100vh;
 }
 
 /* SIDEBAR */
 .sidebar {
     width: 220px;
-    height: 100vh;
     background: #111827;
     color: white;
     padding: 20px;
@@ -119,6 +119,52 @@ tr:hover {
 .badge.hot { background: #ef4444; }
 .badge.warm { background: #f59e0b; }
 .badge.cold { background: #6b7280; }
+
+/* =========================
+💬 CHAT (NEW)
+========================= */
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.chat-bubble {
+    padding: 10px 14px;
+    border-radius: 12px;
+    max-width: 70%;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.chat-user {
+    background: #e5e7eb;
+    align-self: flex-start;
+}
+
+.chat-bot {
+    background: #3b82f6;
+    color: white;
+    align-self: flex-end;
+}
+
+.chat-admin {
+    background: #10b981;
+    color: white;
+    align-self: flex-end;
+}
+
+/* ✍️ typing */
+.typing-indicator {
+    font-size: 13px;
+    color: #6b7280;
+    padding: 5px 10px;
+}
+
+/* SCROLL FIX */
+#chat-box {
+    scroll-behavior: smooth;
+}
 
 /* CHART */
 canvas {

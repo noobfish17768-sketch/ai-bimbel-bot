@@ -1,4 +1,4 @@
-async function toggleBot(status) {
+async function toggleBot(status, botId) {
     try {
         const res = await fetch("/api/bot/toggle", {
             method: "POST",
@@ -6,6 +6,7 @@ async function toggleBot(status) {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
+                bot_id: botId,
                 status: status
             })
         });
@@ -13,13 +14,13 @@ async function toggleBot(status) {
         const data = await res.json();
 
         if (data.success) {
-            console.log("Bot status updated:", status);
+            console.log("✅ Bot status updated:", status);
         } else {
             alert("Error: " + (data.detail || "Unknown error"));
         }
 
     } catch (err) {
         console.error(err);
-        alert("Request gagal");
+        alert("❌ Request gagal");
     }
 }

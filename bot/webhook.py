@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
 from database.database import SessionLocal
-from database.models import Bot, User
+from database.models import Bot
 from services.bot_engine import handle_message
 from bot.telegram import send_telegram
 
@@ -14,6 +14,9 @@ async def telegram_webhook(bot_id: int, request: Request):
     try:
         data = await request.json()
 
+        # =========================
+        # VALIDASI BASIC
+        # =========================
         if "message" not in data:
             return {"ok": True}
 
@@ -31,33 +34,29 @@ async def telegram_webhook(bot_id: int, request: Request):
         print(f"📩 Bot {bot_id} | {telegram_id}: {message}")
 
         # =========================
-        # 🔥 VALIDASI BOT
+        # 🔍 VALIDASI BOT
         # =========================
         bot = db.query(Bot).filter(Bot.id == bot_id).first()
 
         if not bot:
-            print("❌ Bot tidak ditemukan")
+            print(f"❌ Bot {bot_id} tidak ditemukan")
             return {"ok": True}
 
-        owner_id = bot.user_id
-
-        owner = db.query(User).filter(User.id == owner_id).first()
-
-        if not owner or not owner.bot_active:
-            print(f"⛔ Bot OFF owner {owner_id}")
+        if not bot.is_active:
+            print(f"⛔ Bot OFF {bot_id}")
             return {"ok": True}
 
         # =========================
-        # RUN AI
+        # 🤖 RUN AI (PAKAI BOT_ID)
         # =========================
         result = await handle_message(
             user_id=telegram_id,
             message=message,
-            owner_id=owner_id
+            bot_id=bot_id   # ✅ FIX: bukan owner_id lagi
         )
 
         # =========================
-        # SEND REPLY (🔥 pakai bot_id)
+        # 📤 SEND REPLY
         # =========================
         if result and result.get("reply"):
             await send_telegram(

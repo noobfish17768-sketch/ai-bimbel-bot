@@ -10,20 +10,22 @@
 
 <div class="layout">
 
+    <!-- SIDEBAR -->
     <div class="sidebar">
         <h2>🚀 CRM</h2>
         <a href="/dashboard?bot_id={{ current_bot_id }}">📊 Dashboard</a>
         <a href="/conversations?bot_id={{ current_bot_id }}">💬 Chats</a>
-        <a href="/settings">⚙️ Settings</a>
+        <a href="/settings?bot_id={{ current_bot_id }}">⚙️ Settings</a>
         <a href="/admin">👑 Admin</a>
         <a href="/logout">🚪 Logout</a>
     </div>
 
+    <!-- MAIN -->
     <div class="main">
 
         <h1>📊 Dashboard</h1>
 
-        <!-- 🔥 BOT SELECTOR -->
+        <!-- BOT SELECTOR -->
         <div style="margin-bottom:20px;">
             <form method="get" action="/dashboard">
                 <label>Pilih Bot:</label>
@@ -74,7 +76,7 @@
             </tr>
 
             {% for lead in leads %}
-            <tr>
+            <tr onclick="goToInbox({{ lead.id }})" style="cursor:pointer;">
                 <td>{{ lead.nama_orangtua or '-' }}</td>
                 <td>{{ lead.nama_anak or '-' }}</td>
                 <td>{{ lead.whatsapp }}</td>
@@ -86,6 +88,10 @@
     </div>
 </div>
 
+<!-- ========================= -->
+<!-- SCRIPT -->
+<!-- ========================= -->
+
 <script>
 async function toggleBot(status) {
     const checkbox = document.getElementById("botToggle");
@@ -96,7 +102,10 @@ async function toggleBot(status) {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ status })
+            body: JSON.stringify({
+                status: status,
+                bot_id: {{ current_bot_id }}
+            })
         });
 
         const data = await res.json();
@@ -114,6 +123,10 @@ async function toggleBot(status) {
         checkbox.checked = !status;
     }
 }
+
+function goToInbox(leadId) {
+    window.location.href = `/inbox?bot_id={{ current_bot_id }}&lead_id=${leadId}`;
+}
 </script>
 
 <script>
@@ -124,8 +137,14 @@ new Chart(ctx, {
     data: {
         labels: ["COLD","WARM","HOT"],
         datasets: [{
-            data: [{{ cold }}, {{ warm }}, {{ hot }}]
+            data: [{{ cold }}, {{ warm }}, {{ hot }}],
+            backgroundColor: ["#6b7280", "#f59e0b", "#ef4444"]
         }]
+    },
+    options: {
+        plugins: {
+            legend: { display: false }
+        }
     }
 });
 </script>
