@@ -27,8 +27,9 @@ def dashboard(
     # =========================
     # 🔍 GET BOT
     # =========================
-    bot_id = get_current_bot(request, user)
-
+    bot_id = get_current_bot(request, user, db)
+    bot_id = bot.id if bot else None
+    
     if not bot_id:
         # fallback: ambil bot pertama
         if user.role == "owner":
