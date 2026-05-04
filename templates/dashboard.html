@@ -1,83 +1,109 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
-<body>
+<body class="bg-gray-100">
 
-<div class="layout">
+<div class="flex h-screen">
 
     <!-- SIDEBAR -->
-    <div class="sidebar">
-        <h2>🚀 CRM</h2>
-        <a href="/dashboard?bot_id={{ current_bot_id }}">📊 Dashboard</a>
-        <a href="/conversations?bot_id={{ current_bot_id }}">💬 Chats</a>
-        <a href="/settings?bot_id={{ current_bot_id }}">⚙️ Settings</a>
-        <a href="/admin">👑 Admin</a>
-        <a href="/logout">🚪 Logout</a>
+    <div class="w-64 bg-gray-900 text-white flex flex-col">
+        <div class="p-5 text-xl font-bold border-b border-gray-700">
+            🚀 CRM Bot
+        </div>
+
+        <div class="p-4 space-y-2">
+            <a href="/dashboard" class="block p-2 hover:bg-gray-700 rounded">📊 Dashboard</a>
+            <a href="/inbox?bot_id={{ current_bot_id }}" class="block p-2 hover:bg-gray-700 rounded">💬 Inbox</a>
+            <a href="/settings?bot_id={{ current_bot_id }}" class="block p-2 hover:bg-gray-700 rounded">⚙️ Settings</a>
+            <a href="/admin" class="block p-2 hover:bg-gray-700 rounded">👑 Admin</a>
+            <a href="/logout" class="block p-2 text-red-400 hover:bg-gray-700 rounded">🚪 Logout</a>
+        </div>
     </div>
 
     <!-- MAIN -->
-    <div class="main">
+    <div class="flex-1 p-6 overflow-y-auto">
 
-        <h1>📊 Dashboard</h1>
+        <!-- HEADER -->
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">📊 Dashboard</h1>
 
-        <!-- BOT SELECTOR -->
-        <div style="margin-bottom:20px;">
-            <form method="get" action="/dashboard">
-                <label>Pilih Bot:</label>
-                <select name="bot_id" onchange="this.form.submit()">
-                    {% for bot in bots %}
-                        <option value="{{ bot.id }}"
-                            {% if bot.id == current_bot_id %}selected{% endif %}>
-                            {{ bot.name }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </form>
+            <button onclick="openModal()"
+                class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                + Bot Baru
+            </button>
         </div>
 
-        <!-- BOT TOGGLE -->
-        <div style="margin-bottom:20px;">
-            <label>
-                <input type="checkbox"
-                       id="botToggle"
-                       onchange="toggleBot(this.checked)"
-                       {{ 'checked' if bot_active else '' }}>
-                🤖 Bot Active
-            </label>
+        <!-- =========================
+        BOT CARDS
+        ========================= -->
+        <div class="grid md:grid-cols-3 gap-4 mb-6">
 
-            <span id="botStatusText">
-                {{ 'ON' if bot_active else 'OFF' }}
-            </span>
+            {% for bot in bots %}
+            <div class="bg-white p-5 rounded-xl shadow 
+                {% if bot.id == current_bot_id %}border-2 border-blue-500{% endif %}">
+
+                <div class="flex justify-between items-center">
+                    <h3 class="font-semibold">{{ bot.name }}</h3>
+
+                    <span class="text-xs">
+                        {% if bot.is_active %}
+                            🟢 Active
+                        {% else %}
+                            🔴 Off
+                        {% endif %}
+                    </span>
+                </div>
+
+                <div class="mt-4 flex gap-2">
+
+                    <button onclick="switchBot({{ bot.id }})"
+                        class="flex-1 bg-gray-100 p-2 rounded text-sm hover:bg-gray-200">
+                        Open
+                    </button>
+
+                    <button onclick="toggleBot({{ bot.id }}, {{ 'true' if bot.is_active else 'false' }})"
+                        class="flex-1 bg-yellow-400 text-white p-2 rounded text-sm">
+                        Toggle
+                    </button>
+
+                </div>
+
+            </div>
+            {% endfor %}
+
         </div>
 
-        <!-- KPI -->
-        <div class="cards">
-            <div class="card"><h3>Total</h3><p>{{ total }}</p></div>
-            <div class="card hot"><h3>HOT</h3><p>{{ hot }}</p></div>
-            <div class="card warm"><h3>WARM</h3><p>{{ warm }}</p></div>
-            <div class="card cold"><h3>COLD</h3><p>{{ cold }}</p></div>
+        <!-- =========================
+        KPI
+        ========================= -->
+        <div class="grid grid-cols-4 gap-4 mb-6">
+            <div class="bg-white p-4 rounded shadow"><p>Total</p><b>{{ total }}</b></div>
+            <div class="bg-red-100 p-4 rounded shadow"><p>HOT</p><b>{{ hot }}</b></div>
+            <div class="bg-yellow-100 p-4 rounded shadow"><p>WARM</p><b>{{ warm }}</b></div>
+            <div class="bg-gray-200 p-4 rounded shadow"><p>COLD</p><b>{{ cold }}</b></div>
         </div>
 
         <!-- CHART -->
         <canvas id="chart"></canvas>
 
         <!-- TABLE -->
-        <table>
-            <tr>
-                <th>Nama</th>
+        <table class="w-full mt-6 bg-white rounded shadow">
+            <tr class="bg-gray-100 text-left">
+                <th class="p-2">Nama</th>
                 <th>Anak</th>
                 <th>WA</th>
                 <th>Status</th>
             </tr>
 
             {% for lead in leads %}
-            <tr onclick="goToInbox({{ lead.id }})" style="cursor:pointer;">
-                <td>{{ lead.nama_orangtua or '-' }}</td>
+            <tr onclick="goToInbox({{ lead.id }})" class="hover:bg-gray-50 cursor-pointer">
+                <td class="p-2">{{ lead.nama_orangtua or '-' }}</td>
                 <td>{{ lead.nama_anak or '-' }}</td>
                 <td>{{ lead.whatsapp }}</td>
                 <td>{{ lead.status }}</td>
@@ -88,46 +114,38 @@
     </div>
 </div>
 
-<!-- ========================= -->
-<!-- SCRIPT -->
-<!-- ========================= -->
 
-<script>
-async function toggleBot(status) {
-    const checkbox = document.getElementById("botToggle");
+<!-- =========================
+MODAL CREATE BOT
+========================= -->
+<div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
 
-    try {
-        const res = await fetch("/api/bot/toggle", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                status: status,
-                bot_id: {{ current_bot_id }}
-            })
-        });
+    <div class="bg-white p-6 rounded-xl w-full max-w-md">
 
-        const data = await res.json();
+        <h2 class="text-lg font-bold mb-4">Tambah Bot</h2>
 
-        if (data.success) {
-            document.getElementById("botStatusText").innerText = status ? "ON" : "OFF";
-        } else {
-            alert("Gagal update bot");
-            checkbox.checked = !status;
-        }
+        <input id="bot_name" placeholder="Nama Bot" class="w-full border p-2 mb-2 rounded">
+        <input id="bot_token" placeholder="Telegram Token" class="w-full border p-2 mb-2 rounded">
 
-    } catch (err) {
-        console.error(err);
-        alert("Error koneksi");
-        checkbox.checked = !status;
-    }
-}
+        <select id="persona" class="w-full border p-2 mb-2 rounded">
+            <option value="bimbel">Bimbel</option>
+            <option value="sales">Sales</option>
+        </select>
 
-function goToInbox(leadId) {
-    window.location.href = `/inbox?bot_id={{ current_bot_id }}&lead_id=${leadId}`;
-}
-</script>
+        <textarea id="prompt" placeholder="System Prompt"
+            class="w-full border p-2 mb-4 rounded"></textarea>
+
+        <div class="flex justify-end gap-2">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-200 rounded">Cancel</button>
+            <button onclick="createBot()" class="px-4 py-2 bg-blue-500 text-white rounded">Create</button>
+        </div>
+
+    </div>
+</div>
+
+
+<!-- JS -->
+<script src="/static/dashboard.js"></script>
 
 <script>
 const ctx = document.getElementById("chart");
@@ -137,14 +155,8 @@ new Chart(ctx, {
     data: {
         labels: ["COLD","WARM","HOT"],
         datasets: [{
-            data: [{{ cold }}, {{ warm }}, {{ hot }}],
-            backgroundColor: ["#6b7280", "#f59e0b", "#ef4444"]
+            data: [{{ cold }}, {{ warm }}, {{ hot }}]
         }]
-    },
-    options: {
-        plugins: {
-            legend: { display: false }
-        }
     }
 });
 </script>
