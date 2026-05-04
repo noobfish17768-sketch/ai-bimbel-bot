@@ -45,7 +45,7 @@ def dashboard(
             bot = db.query(Bot).filter(Bot.user_id == user.id).first()
 
         if not bot:
-            return RedirectResponse("/create-bot", status_code=302)
+            return RedirectResponse("/create", status_code=302)
 
         bot_id = bot.id
 
