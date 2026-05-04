@@ -30,7 +30,7 @@ echo "✅ Migrations completed"
 # =========================
 echo "🌱 Seeding default settings..."
 
-python scripts/seed_settings.py || {
+python -m scripts.seed_settings || {
     echo "⚠️ Seed skipped / failed (non critical)"
 }
 
