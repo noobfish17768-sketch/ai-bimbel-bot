@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory="templates")
 @router.get("/inbox")
 def inbox(request: Request, db=Depends(get_db)):
 
-    user = get_current_user_web(request)
+    user = get_current_user_web(request,db)
 
     if not hasattr(user, "id"):
         return user
