@@ -7,7 +7,7 @@ from typing import Generator
 # =========================
 # DB SESSION
 # =========================
-def get_db() -> Generator:
+def get_db():
     db = SessionLocal()
     try:
         yield db

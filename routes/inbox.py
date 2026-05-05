@@ -110,8 +110,9 @@ def inbox(request: Request, db=Depends(get_db)):
 async def manual_reply(
     request: Request,
     db=Depends(get_db),
-    user=Depends(get_current_user_web)
 ):
+    user = get_current_user_web(request, db)
+
     if not hasattr(user, "id"):
         raise HTTPException(401)
 
@@ -213,8 +214,9 @@ async def manual_reply(
 async def toggle_ai(
     request: Request,
     db=Depends(get_db),
-    user=Depends(get_current_user_web)
 ):
+    user = get_current_user_web(request, db)
+
     if not hasattr(user, "id"):
         raise HTTPException(401)
 
