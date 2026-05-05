@@ -8,20 +8,24 @@
 <h1>Buat Bot Baru</h1>
 
 <form onsubmit="event.preventDefault(); createBot();">
-    <input type="text" name="name" placeholder="Nama Bot" required><br><br>
+    <input id="bot_name" type="text" placeholder="Nama Bot" required><br><br>
 
-    <input type="text" name="telegram_token" placeholder="Token Telegram" required><br><br>
+    <input id="bot_token" type="text" placeholder="Token Telegram" required><br><br>
 
-    <select name="persona_type">
+    <select id="persona">
         <option value="bimbel">Bimbel</option>
         <option value="curhat">Curhat</option>
         <option value="jualan">Jualan</option>
     </select>
 
-    <textarea name="system_prompt" placeholder="System Prompt"></textarea><br><br>
+    <textarea id="prompt" placeholder="System Prompt"></textarea><br><br>
 
-    <button type="submit">Create Bot</button>
+    <!-- 🔥 penting: bukan submit -->
+    <button type="button" onclick="createBot()">Create Bot</button>
 </form>
+
+<!-- 🔥 WAJIB: load JS kamu -->
+<script src="/static/dashboard.js"></script>
 
 </body>
 </html>
