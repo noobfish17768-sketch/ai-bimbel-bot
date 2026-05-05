@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func
 
 from database.models import LeadDB, Bot
 from core.dependencies import get_db
@@ -35,7 +36,7 @@ def dashboard(
         ).first()
 
         if not bot:
-            return RedirectResponse("/create-bot", status_code=302)
+            return RedirectResponse("/create", status_code=302)
 
     bot_id = bot.id
 
@@ -44,9 +45,18 @@ def dashboard(
     # =========================
     base = db.query(LeadDB).filter(LeadDB.bot_id == bot_id)
 
-    hot = base.filter(LeadDB.status == "HOT").count()
-    warm = base.filter(LeadDB.status == "WARM").count()
-    cold = base.filter(LeadDB.status == "COLD").count()
+    stats = db.query(
+        LeadDB.status,
+        func.count().label("count")
+    ).filter(
+        LeadDB.bot_id == bot_id
+    ).group_by(LeadDB.status).all()
+
+    counts = {s.status: s.count for s in stats}
+
+    hot = counts.get("HOT", 0)
+    warm = counts.get("WARM", 0)
+    cold = counts.get("COLD", 0)
 
     query = base
 

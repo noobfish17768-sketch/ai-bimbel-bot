@@ -87,3 +87,8 @@ function goToInbox(leadId) {
 
     window.location.href = `/inbox?bot_id=${botId}&lead_id=${leadId}`;
 }
+
+function switchBot(botId) {
+    if (!botId) return; // ✅ guard
+    window.location.href = `/dashboard?bot_id=${botId}`;
+}
