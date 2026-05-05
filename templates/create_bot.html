@@ -7,7 +7,7 @@
 
 <h1>Buat Bot Baru</h1>
 
-<form method="post" action="/api/bot/create">
+<form onsubmit="event.preventDefault(); createBot();">
     <input type="text" name="name" placeholder="Nama Bot" required><br><br>
 
     <input type="text" name="telegram_token" placeholder="Token Telegram" required><br><br>
