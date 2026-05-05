@@ -18,54 +18,36 @@ def dashboard(
     page: int = 1,
     db=Depends(get_db)
 ):
-
     user = get_current_user_web(request, db)
 
     if not hasattr(user, "id"):
         return user
 
-    
     # =========================
-    # 🔍 GET BOT
+    # 🔍 GET BOT (SAFE)
     # =========================
-    bot = None  # ✅ WAJIB ADA
+    bot = get_current_bot(request, user, db)
 
-    try:
-        bot = get_current_bot(request, user, db)
-    except HTTPException:
-        bot = None
-
-    bot_id = bot.id if bot else None
-
-    if not bot_id:
-        # fallback: ambil bot pertama
-        if user.role == "owner":
-            bot = db.query(Bot).filter(Bot.owner_id == user.id).first()
-        else:
-            bot = db.query(Bot).filter(Bot.user_id == user.id).first()
+    if not bot:
+        # fallback ambil bot pertama milik user
+        bot = db.query(Bot).filter(
+            (Bot.owner_id == user.id) | (Bot.user_id == user.id)
+        ).first()
 
         if not bot:
-            return RedirectResponse("/create", status_code=302)
+            return RedirectResponse("/create-bot", status_code=302)
 
-        bot_id = bot.id
-
-    # =========================
-    # 📊 BASE QUERY (FIX)
-    # =========================
-    base = db.query(LeadDB).filter(
-        LeadDB.bot_id == bot_id
-    )
+    bot_id = bot.id
 
     # =========================
-    # 📊 STATS
+    # 📊 BASE QUERY
     # =========================
+    base = db.query(LeadDB).filter(LeadDB.bot_id == bot_id)
+
     hot = base.filter(LeadDB.status == "HOT").count()
     warm = base.filter(LeadDB.status == "WARM").count()
     cold = base.filter(LeadDB.status == "COLD").count()
 
-    # =========================
-    # 🔎 FILTER
-    # =========================
     query = base
 
     if status:
@@ -77,9 +59,6 @@ def dashboard(
             LeadDB.whatsapp.ilike(f"%{q}%")
         )
 
-    # =========================
-    # 📄 PAGINATION
-    # =========================
     per_page = 10
 
     leads = query.order_by(LeadDB.created_at.desc()) \
@@ -90,17 +69,11 @@ def dashboard(
     total = query.count()
 
     # =========================
-    # 🤖 BOT LIST
+    # 🤖 BOT LIST (CONSISTENT)
     # =========================
-    if user.role == "owner":
-        bots = db.query(Bot).filter(Bot.owner_id == user.id).all()
-    else:
-        bots = db.query(Bot).filter(Bot.user_id == user.id).all()
-
-    # =========================
-    # 🧠 CURRENT BOT INFO
-    # =========================
-    current_bot = bot if bot else db.query(Bot).filter(Bot.id == bot_id).first()
+    bots = db.query(Bot).filter(
+        (Bot.owner_id == user.id) | (Bot.user_id == user.id)
+    ).all()
 
     return templates.TemplateResponse(
         "dashboard.html",
@@ -114,8 +87,8 @@ def dashboard(
             "page": page,
             "bot_id": bot_id,
             "bots": bots,
+            "current_bot": bot,
             "current_bot_id": bot_id,
-            "current_bot": current_bot,
-            "bot_active": current_bot.is_active if current_bot else True
+            "bot_active": bot.is_active
         }
     )

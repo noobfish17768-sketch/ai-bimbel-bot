@@ -44,14 +44,14 @@ VALID_PERSONA = ["bimbel", "curhat", "jualan"]
 def validate_bot_token(token: str) -> bool:
     try:
         url = f"https://api.telegram.org/bot{token}/getMe"
-        res = requests.get(url).json()
+        res = requests.get(url, timeout=5).json()
         return res.get("ok", False)
     except:
         return False
 
 
 # =========================
-# SET WEBHOOK
+# SET WEBHOOK (FIX ONLY)
 # =========================
 def set_webhook(token: str, bot_id: int):
     try:
@@ -61,7 +61,7 @@ def set_webhook(token: str, bot_id: int):
 
         res = requests.post(url, json={
             "url": webhook_url
-        }).json()
+        }, timeout=5).json()
 
         return res.get("ok", False)
 
@@ -80,15 +80,12 @@ def create_bot(
     current_user: User = Depends(get_current_user_db)
 ):
 
-    # VALIDASI PERSONA
     if payload.persona_type not in VALID_PERSONA:
         raise HTTPException(status_code=400, detail="Invalid persona_type")
 
-    # VALIDASI TOKEN
     if not validate_bot_token(payload.telegram_token):
         raise HTTPException(status_code=400, detail="Token Telegram tidak valid")
 
-    # CEK TOKEN DUPLIKAT
     existing = db.query(Bot).filter(
         Bot.telegram_token == payload.telegram_token
     ).first()
@@ -96,9 +93,9 @@ def create_bot(
     if existing:
         raise HTTPException(status_code=400, detail="Token sudah digunakan")
 
-    # CREATE BOT
     bot = Bot(
         owner_id=current_user.id,
+        user_id=current_user.id,  # ✅ FIX (tidak ubah fitur, cuma biar kebaca)
         name=payload.name,
         telegram_token=payload.telegram_token,
         persona_type=payload.persona_type,
@@ -118,13 +115,7 @@ def create_bot(
         print("❌ CREATE BOT ERROR:", e)
         raise HTTPException(status_code=500, detail="Create bot failed")
 
-    # SET WEBHOOK
     success = set_webhook(bot.telegram_token, bot.id)
-
-    if success:
-        print(f"✅ Webhook aktif untuk bot {bot.id}")
-    else:
-        print(f"⚠️ Webhook gagal untuk bot {bot.id}")
 
     return {
         "success": True,
@@ -134,7 +125,7 @@ def create_bot(
 
 
 # =========================
-# TOGGLE BOT
+# TOGGLE BOT (FIX ACCESS ONLY)
 # =========================
 @router.post("/toggle")
 def toggle_bot(
@@ -144,7 +135,7 @@ def toggle_bot(
 ):
     bot = db.query(Bot).filter(
         Bot.id == data.bot_id,
-        Bot.owner_id == current_user.id
+        (Bot.owner_id == current_user.id) | (Bot.user_id == current_user.id)  # ✅ FIX
     ).first()
 
     if not bot:
@@ -161,7 +152,6 @@ def toggle_bot(
         print("❌ DB ERROR:", e)
         raise HTTPException(status_code=500, detail="Update failed")
 
-    # REDIS CACHE
     if redis_client:
         try:
             redis_client.set(
@@ -180,7 +170,7 @@ def toggle_bot(
 
 
 # =========================
-# LIST
+# LIST (FIX ACCESS ONLY)
 # =========================
 @router.get("/list")
 def list_bots(
@@ -188,7 +178,7 @@ def list_bots(
     current_user: User = Depends(get_current_user_db)
 ):
     bots = db.query(Bot).filter(
-        Bot.owner_id == current_user.id
+        (Bot.owner_id == current_user.id) | (Bot.user_id == current_user.id)  # ✅ FIX
     ).order_by(Bot.id.desc()).all()
 
     return {
@@ -206,7 +196,7 @@ def list_bots(
 
 
 # =========================
-# EDIT
+# UPDATE (FIX ACCESS ONLY)
 # =========================
 @router.put("/{bot_id}")
 def update_bot(
@@ -217,7 +207,7 @@ def update_bot(
 ):
     bot = db.query(Bot).filter(
         Bot.id == bot_id,
-        Bot.owner_id == current_user.id
+        (Bot.owner_id == current_user.id) | (Bot.user_id == current_user.id)  # ✅ FIX
     ).first()
 
     if not bot:

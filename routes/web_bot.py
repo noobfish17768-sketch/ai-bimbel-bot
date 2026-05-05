@@ -9,7 +9,7 @@ router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
 
-@router.get("/create-bot")
+@router.get("/create")
 def create_bot_page(request: Request, db=Depends(get_db)):
     user = get_current_user_web(request, db)
 

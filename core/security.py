@@ -86,12 +86,12 @@ def get_current_bot(
     request: Request,
     user: User,
     db: Session
-) -> Bot:
+) -> Bot | None:
 
     bot_id = request.query_params.get("bot_id")
 
     if not bot_id:
-        return None  # biar dashboard bisa fallback
+        return None  # penting untuk dashboard fallback
 
     try:
         bot_id = int(bot_id)
@@ -100,10 +100,7 @@ def get_current_bot(
 
     bot = db.query(Bot).filter(
         Bot.id == bot_id,
-        (
-            (Bot.owner_id == user.id) |
-            (Bot.user_id == user.id)
-        )
+        (Bot.owner_id == user.id) | (Bot.user_id == user.id)
     ).first()
 
     if not bot:

@@ -3,7 +3,7 @@ import os
 
 
 def set_telegram_webhook(bot_token: str, bot_id: int):
-    base_url = os.getenv("DATABASE_URL")
+    base_url = os.getenv("BASE_URL")
 
     if not base_url:
         print("❌ BASE_URL not set")
