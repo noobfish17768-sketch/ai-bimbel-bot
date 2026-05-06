@@ -1,45 +1,39 @@
-#!/bin/sh
+#!/bin/bash
 
-set -e
+set -e  # 🔥 langsung stop kalau ada error
+set -o pipefail
 
 echo "================================="
 echo "🚀 STARTING APPLICATION"
 echo "================================="
 
 # =========================
-# WAIT DATABASE (ANTI CRASH)
+# WAIT DB (opsional)
 # =========================
 echo "⏳ Waiting for database..."
-
 sleep 3
 
 # =========================
-# MIGRATION
+# MIGRATIONS
 # =========================
 echo "🚀 Running migrations..."
-
 alembic upgrade head || {
-    echo "❌ Migration failed!"
+    echo "❌ MIGRATION FAILED"
     exit 1
 }
 
-echo "✅ Migrations completed"
-
 # =========================
-# SEED SETTINGS (OPTIONAL BUT IMPORTANT)
+# SEED
 # =========================
-echo "🌱 Seeding default settings..."
-
-python -m scripts.seed_settings || {
-    echo "⚠️ Seed skipped / failed (non critical)"
+echo "🌱 Seeding..."
+python scripts/seed.py || {
+    echo "❌ SEED FAILED"
+    exit 1
 }
 
 # =========================
-# START APP
+# START SERVER
 # =========================
 echo "🚀 Starting FastAPI app..."
 
-exec uvicorn app:app \
-    --host 0.0.0.0 \
-    --port ${PORT:-8000} \
-    --workers ${WORKERS:-1}
+exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080}
