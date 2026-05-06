@@ -1,6 +1,7 @@
 import json
 import os
 import openai
+print("OPENAI FILE:", openai.__file__)
 print("OPENAI VERSION:", openai.__version__)
 from openai import OpenAI
 from database.database import SessionLocal
