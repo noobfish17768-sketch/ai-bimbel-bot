@@ -26,7 +26,7 @@ alembic upgrade head || {
 # SEED
 # =========================
 echo "🌱 Seeding..."
-python scripts/seed.py || {
+python scripts/seed_settings.py || {
     echo "❌ SEED FAILED"
     exit 1
 }
