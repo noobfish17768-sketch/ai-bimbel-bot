@@ -1,5 +1,7 @@
 import json
 import os
+import openai
+print("OPENAI VERSION:", openai.__version__)
 from openai import OpenAI
 from database.database import SessionLocal
 from database.models import LeadDB, Conversation, Bot
@@ -99,13 +101,13 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
         # 🔍 GET / CREATE LEAD
         # =========================
         lead = db.query(LeadDB).filter(
-            LeadDB.whatsapp == user_id,
+            LeadDB.telegram_id == user_id,
             LeadDB.bot_id == bot_id
         ).first()
 
         if not lead:
             lead = LeadDB(
-                whatsapp=user_id,
+                telegram_id=user_id,
                 bot_id=bot_id,
                 status="COLD",
                 lead_score=0,
@@ -151,9 +153,13 @@ STATUS_LEAD: {current_status}
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=[
-                {"role": "system", "content": system_context},
+                {
+                    "role": "system",
+                    "content": system_context.strip()
+                },
                 *history
             ],
+            temperature=0.7,
             max_output_tokens=300
         )
 
