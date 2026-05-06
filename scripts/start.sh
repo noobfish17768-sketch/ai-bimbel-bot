@@ -26,14 +26,11 @@ alembic upgrade head || {
 # SEED
 # =========================
 echo "🌱 Seeding..."
-python scripts/seed_settings.py || {
-    echo "❌ SEED FAILED"
-    exit 1
-}
+python scripts/seed_settings.py || echo "⚠️ Seed skipped"
 
 # =========================
 # START SERVER
 # =========================
 echo "🚀 Starting FastAPI app..."
-
+echo "🔥 READY TO START UVICORN"
 exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080}
