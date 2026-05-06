@@ -151,20 +151,17 @@ STATUS_LEAD: {current_status}
         # =========================
         # 🤖 AI CALL
         # =========================
-        response = client.responses.create(
+        response = client.chat.completions.create(
             model="gpt-4.1-mini",
-            input=[
-                {
-                    "role": "system",
-                    "content": system_context.strip()
-                },
+            messages=[
+                {"role": "system", "content": system_context.strip()},
                 *history
             ],
             temperature=0.7,
-            max_output_tokens=300
+            max_tokens=300
         )
 
-        ai_text = response.output_text
+        ai_text = response.choices[0].message.content
         data = safe_parse(ai_text)
 
         reply = format_reply(data.get("reply", ""))
