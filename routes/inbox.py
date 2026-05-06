@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory="templates")
 @router.get("/inbox")
 def inbox(request: Request, db=Depends(get_db)):
 
-    user = get_current_user_web(request,db)
+    user = get_current_user_web(request, db)
 
     if not hasattr(user, "id"):
         return user
@@ -135,7 +135,7 @@ async def manual_reply(
     message = message.strip()
 
     # =========================
-    # 🔍 GET LEAD
+    # 🔍 GET LEAD (FRESH DATA)
     # =========================
     lead = db.query(LeadDB).filter(
         LeadDB.id == lead_id
@@ -156,9 +156,9 @@ async def manual_reply(
         raise HTTPException(403, "Akses ditolak")
 
     # =========================
-    # 🛑 AUTO PAUSE AI
+    # 🛑 AUTO PAUSE AI (SAFE)
     # =========================
-    if getattr(lead, "ai_enabled", True):
+    if lead.ai_enabled is True:
         print(f"🛑 AI AUTO-PAUSED (lead {lead.id})")
         lead.ai_enabled = False
 
@@ -174,7 +174,7 @@ async def manual_reply(
         text=message
     )
 
-    if "error" in result:
+    if isinstance(result, dict) and "error" in result:
         raise HTTPException(500, result["error"])
 
     # =========================
@@ -199,6 +199,8 @@ async def manual_reply(
 
     lead.last_chat = datetime.utcnow()
 
+    # 🔥 IMPORTANT: ensure state consistency
+    db.refresh(lead)
     db.commit()
 
     return RedirectResponse(
@@ -208,7 +210,7 @@ async def manual_reply(
 
 
 # =========================
-# 🔁 TOGGLE AI
+# 🔁 TOGGLE AI (FIXED + SAFE SYNC)
 # =========================
 @router.post("/api/inbox/toggle-ai")
 async def toggle_ai(
@@ -239,8 +241,24 @@ async def toggle_ai(
     if not lead:
         raise HTTPException(404, "Lead not found")
 
-    lead.ai_enabled = not lead.ai_enabled
+    # =========================
+    # 🔁 SAFE TOGGLE
+    # =========================
+    lead.ai_enabled = not bool(lead.ai_enabled)
+
     db.commit()
+    db.refresh(lead)
+
+    # =========================
+    # 📡 PUSH UPDATE TO UI (IMPORTANT FIX)
+    # =========================
+    try:
+        await manager.send_to_lead(lead.id, {
+            "type": "state_update",
+            "ai_enabled": lead.ai_enabled
+        })
+    except:
+        pass
 
     print(f"🔁 AI TOGGLED lead {lead.id} -> {lead.ai_enabled}")
 

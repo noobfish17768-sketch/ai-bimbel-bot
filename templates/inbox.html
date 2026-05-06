@@ -16,6 +16,12 @@
 
     <div class="p-4 border-b font-bold">
         💬 Inbox
+    <div class="text-sm">
+            <a href="/dashboard" class="mr-3 text-blue-500">Dashboard</a>
+            <a href="/conversations" class="mr-3 text-blue 500">conversations</a>
+            <a href="/settings" class="mr-3 text-blue-500">Settings</a>
+            <a href="/logout" class="text-red-500">Logout</a>
+        </div>
     </div>
 
     {% for lead in leads %}
@@ -65,14 +71,35 @@
         <div class="text-right text-sm">
             <div>Score: <b>{{ active_lead.lead_score }}</b></div>
 
-            {% if active_lead.ai_enabled %}
-                <div class="text-green-500 text-xs">AI ON</div>
-            {% else %}
-                <div class="text-red-500 text-xs">AI OFF</div>
-            {% endif %}
+            <!-- =========================
+            🤖 AI STATUS (LIVE SAFE)
+            ========================= -->
+            <div id="ai-status">
+                {% if active_lead.ai_enabled %}
+                    <div class="text-green-500 text-xs">AI ON</div>
+                {% else %}
+                    <div class="text-red-500 text-xs">AI OFF</div>
+                {% endif %}
+            </div>
+
+            <!-- OPTIONAL TOGGLE BUTTON -->
+            <form method="post" action="/api/inbox/toggle-ai">
+                <input type="hidden" name="lead_id" value="{{ active_lead.id }}">
+
+                <button id="ai-btn" class="text-xs mt-1 px-2 py-1 border rounded">
+                    {% if active_lead.ai_enabled %}
+                        Pause AI
+                    {% else %}
+                        Resume AI
+                    {% endif %}
+                </button>
+            </form>
         </div>
     </div>
 
+    <!-- =========================
+    💬 CHAT BOX
+    ========================= -->
     <div id="chat-box" class="flex-1 p-4 overflow-y-auto space-y-3">
 
         {% for chat in chats %}
@@ -101,6 +128,9 @@
         AI sedang mengetik...
     </div>
 
+    <!-- =========================
+    📤 INPUT
+    ========================= -->
     <form 
         action="/api/inbox/reply" 
         method="post"
@@ -134,6 +164,9 @@
 
 </div>
 
+<!-- =========================
+📡 WEBSOCKET + LIVE UPDATE FIX
+========================= -->
 <script>
 
 let leadId = "{{ active_lead.id if active_lead else '' }}";
@@ -150,6 +183,9 @@ if (leadId) {
     ws.onmessage = function(event) {
         const data = JSON.parse(event.data);
 
+        // =========================
+        // ⌨️ typing indicator
+        // =========================
         if (data.type === "typing") {
             if (typing) typing.classList.remove("hidden");
             return;
@@ -160,6 +196,9 @@ if (leadId) {
             return;
         }
 
+        // =========================
+        // 💬 chat message
+        // =========================
         if (data.type === "message") {
 
             if (typing) typing.classList.add("hidden");
@@ -185,7 +224,32 @@ if (leadId) {
             }
 
             chatBox.appendChild(wrapper);
-            chatBox.scrollTop = chatBox.scrollHeight;
+            chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
+        }
+
+        // =========================
+        // 🤖 AI STATE SYNC FIX (IMPORTANT)
+        // =========================
+        if (data.type === "state_update") {
+
+            const aiStatus = document.getElementById("ai-status");
+            const aiBtn = document.getElementById("ai-btn");
+
+            if (data.ai_enabled) {
+                if (aiStatus) {
+                    aiStatus.innerHTML = '<div class="text-green-500 text-xs">AI ON</div>';
+                }
+                if (aiBtn) {
+                    aiBtn.innerText = "Pause AI";
+                }
+            } else {
+                if (aiStatus) {
+                    aiStatus.innerHTML = '<div class="text-red-500 text-xs">AI OFF</div>';
+                }
+                if (aiBtn) {
+                    aiBtn.innerText = "Resume AI";
+                }
+            }
         }
     };
 }

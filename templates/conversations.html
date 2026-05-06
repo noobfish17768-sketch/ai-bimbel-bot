@@ -40,7 +40,7 @@
                     <td class="p-3">
                         <a href="/inbox?lead_id={{ chat.lead_id }}"
                            class="text-blue-500 hover:underline">
-                            {{ chat.lead.whatsapp or chat.lead.telegram_id or "User" }}
+                            {{ chat.lead.whatsapp if chat.lead else chat.lead.telegram_id if chat.lead else "User" }}
                         </a>
                     </td>
 
