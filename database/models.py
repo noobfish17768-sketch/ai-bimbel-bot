@@ -51,6 +51,7 @@ class Bot(Base):
     system_prompt = Column(Text)
 
     is_active = Column(Boolean, default=True)
+    is_deleted = Column(Boolean, default=False)
 
     created_at = Column(DateTime, server_default=func.now())
 
@@ -64,6 +65,17 @@ class Bot(Base):
         "User",
         foreign_keys=[user_id],
         back_populates="bots_as_admin"
+    )
+    knowledge_items = relationship(
+        "BotKnowledge",
+        back_populates="bot",
+        cascade="all, delete"
+    )
+
+    faq_items = relationship(
+        "BotFAQ",
+        back_populates="bot",
+        cascade="all, delete"
     )
 
     leads = relationship("LeadDB", back_populates="bot", cascade="all, delete")
@@ -85,10 +97,13 @@ class LeadDB(Base):
 
     nama_orangtua = Column(String)
     nama_anak = Column(String)
-    umur_anak = Column(String)
+    umur_anak = Column(Integer)
 
     status = Column(String, default="COLD", index=True)
     notes = Column(Text)
+    minat = Column(Text)
+    intent = Column(Text)
+    last_summary = Column(Text)
 
     created_at = Column(DateTime, server_default=func.now())
     last_chat = Column(DateTime, server_default=func.now())
@@ -121,12 +136,15 @@ class Conversation(Base):
 
     message = Column(Text)
     response = Column(Text)
+    raw_response = Column(Text)
 
     created_at = Column(DateTime, server_default=func.now(), index=True)
 
     # 🔥 RELATION TAMBAHAN (penting)
     bot = relationship("Bot")
     lead = relationship("LeadDB", back_populates="conversations")
+
+    Index('idx_conversation_lead', 'lead_id', 'created_at')
 
 
 # =========================
@@ -145,3 +163,50 @@ class BotSetting(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     bot = relationship("Bot", back_populates="settings")
+
+# =========================
+# ⚙️ BOT KNOWLEDGE
+# =========================
+class BotKnowledge(Base):
+    __tablename__ = "bot_knowledge"
+
+    bot = relationship("Bot", back_populates="knowledge_items")
+
+    id = Column(Integer, primary_key=True)
+
+    bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
+
+    category = Column(String, default="general", index=True)
+    title = Column(String, nullable=True)
+    content = Column(Text)
+    
+    created_at = Column(DateTime, server_default=func.now())
+
+    is_deleted = Column(Boolean, default=False)
+
+    
+# =========================
+# ⚙️ BOT FAQ
+# =========================
+class BotFAQ(Base):
+    __tablename__ = "bot_faq"
+
+    bot = relationship("Bot", back_populates="faq_items")
+
+    id = Column(Integer, primary_key=True)
+
+    bot_id = Column(Integer, ForeignKey("bots.id"), index=True)
+
+    question = Column(Text)
+    answer = Column(Text)
+
+    created_at = Column(DateTime, server_default=func.now())
+    is_deleted = Column(Boolean, default=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            'bot_id',
+            'question',
+            name='unique_bot_question'
+        ),
+    )

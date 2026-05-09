@@ -6,7 +6,7 @@ print("OPENAI FILE:", openai.__file__)
 print("OPENAI VERSION:", openai.__version__)
 from openai import OpenAI
 from database.database import SessionLocal
-from database.models import LeadDB, Conversation, Bot
+from database.models import LeadDB, Conversation, Bot, BotKnowledge, BotFAQ
 from dotenv import load_dotenv
 from datetime import datetime
 
@@ -20,6 +20,9 @@ MAX_HISTORY = 6
 # SAFE JSON PARSER
 # =========================
 def safe_parse(text):
+
+    text = text.replace("```json", "").replace("```", "").strip()
+
     try:
         return json.loads(text)
     except:
@@ -88,7 +91,6 @@ def calculate_score(message, status, prev):
 
     return min(score, 100)
 
-
 # =========================
 # LEAD EXTRACTION
 # =========================
@@ -98,19 +100,33 @@ def extract_lead_data(message):
     data = {}
 
     # nama orang tua
-    m = re.search(r'aku\s+(\w+)', text)
+    m = re.search(
+        r'(aku|saya|sy)\s+([a-zA-Z ]{2,30})',
+        text
+    )
+
     if m:
-        data["nama_orangtua"] = m.group(1).title()
+        nama = m.group(2).strip().split()[0]
+        data["nama_orangtua"] = nama.title()
 
     # umur anak
-    m = re.search(r'usia\s+(\d+)', text)
+    m = re.search(
+        r'(\d+)\s*(tahun|th)',
+        text
+    )
+
     if m:
         data["umur_anak"] = int(m.group(1))
 
     # nama anak
-    m = re.search(r'namanya\s+(\w+)', text)
+    m = re.search(
+        r'(namanya|anakku|anak saya)\s+([a-zA-Z ]{2,30})',
+        text
+    )
+
     if m:
-        data["nama_anak"] = m.group(1).title()
+        nama_anak = m.group(2).strip().split()[0]
+        data["nama_anak"] = nama_anak.title()
 
     # nomer wa
     m = re.search(r'(08\d{8,13}|628\d{7,13})', text)
@@ -179,17 +195,19 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
 
         print("EXTRACTED:", lead_data)
 
-        if lead_data.get("nama_orangtua"):
-            lead.nama_orangtua = lead_data["nama_orangtua"]
+        # =========================
+        # 🧠 LONG TERM MEMORY
+        # =========================
+        long_term_memory = ""
 
-        if lead_data.get("nama_anak"):
-            lead.nama_anak = lead_data["nama_anak"]
+        if lead.last_summary:
+            long_term_memory = f"""
+            =====================
+            LONG TERM MEMORY
+            =====================
 
-        if lead_data.get("umur_anak"):
-            lead.umur_anak = lead_data["umur_anak"]
-
-        if lead_data.get("whatsapp") and not lead.whatsapp:
-            lead.whatsapp = lead_data["whatsapp"]
+            {lead.last_summary}
+            """
 
         # =========================
         # 💬 LOAD HISTORY
@@ -200,13 +218,85 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
         # =========================
         # 🧠 SYSTEM PROMPT
         # =========================
+        knowledge_items = db.query(BotKnowledge).filter(
+            BotKnowledge.bot_id == bot_id
+        ).all()
+
+        faq_items = db.query(BotFAQ).filter(
+            BotFAQ.bot_id == bot_id
+        ).all()
+
+        knowledge_map = {}
+
+        for item in knowledge_items:
+            cat = item.category or "general"
+
+            if cat not in knowledge_map:
+                knowledge_map[cat] = []
+
+            knowledge_map[cat].append(item)
+
+        knowledge_text = ""
+
+        for category, items in knowledge_map.items():
+
+            knowledge_text += f"\n[{category.upper()}]\n"
+
+            for item in items:
+
+                if item.title:
+                    knowledge_text += f"- {item.title}: {item.content}\n"
+                else:
+                    knowledge_text += f"- {item.content}\n"
+
+        faq_text = "\n".join([
+            f"Q: {f.question}\nA: {f.answer}"
+            for f in faq_items
+        ])
+
+        if not knowledge_text:
+            knowledge_text = "Belum ada knowledge base"
+
+        if not faq_text:
+            faq_text = "Belum ada FAQ"
+
         system_context = f"""
-{system_prompt}
+        {system_prompt}
 
-KONDISI: {'CHAT_PERTAMA' if len(history) <= 1 else 'LANJUTAN'}
-STATUS_LEAD: {current_status}
-"""
+        =====================
+        KNOWLEDGE BASE
+        =====================
 
+        {knowledge_text}
+
+        =====================
+        FAQ
+        =====================
+
+        {faq_text}
+
+        =====================
+        LEAD MEMORY
+        =====================
+
+        {long_term_memory or "Belum ada summary"}
+        
+        =====================
+        RULES
+        =====================
+
+        - Gunakan knowledge base
+        - Jangan mengarang
+        - Jika data tidak ada, bilang akan dicek admin
+        - Jangan membuat harga sendiri
+        - Jangan membuat jadwal sendiri
+        - Jangan mengarang promo
+        - Jawab berdasarkan knowledge base
+
+        KONDISI: {'CHAT_PERTAMA' if len(history) <= 1 else 'LANJUTAN'}
+        STATUS_LEAD: {current_status}
+        """
+        
         # =========================
         # 🤖 AI CALL
         # =========================
@@ -222,8 +312,44 @@ STATUS_LEAD: {current_status}
 
         ai_text = response.choices[0].message.content
         data = safe_parse(ai_text)
+        ai_lead = data.get("lead", {})
 
         reply = format_reply(data.get("reply", ""))
+
+        # =========================
+        # MERGE LEAD DATA
+        # PRIORITAS: AI > REGEX
+        # =========================
+
+        final_lead = {
+            "nama_orangtua":
+                ai_lead.get("nama_orangtua")
+                or lead_data.get("nama_orangtua"),
+
+            "nama_anak":
+                ai_lead.get("nama_anak")
+                or lead_data.get("nama_anak"),
+
+            "umur_anak":
+                ai_lead.get("umur_anak")
+                or lead_data.get("umur_anak"),
+
+            "whatsapp":
+                ai_lead.get("whatsapp")
+                or lead_data.get("whatsapp")
+        }
+
+        if final_lead.get("nama_orangtua") and not lead.nama_orangtua:
+            lead.nama_orangtua = final_lead["nama_orangtua"]
+
+        if final_lead.get("nama_anak") and not lead.nama_anak:
+            lead.nama_anak = final_lead["nama_anak"]
+
+        if final_lead.get("umur_anak") and not lead.umur_anak:
+            lead.umur_anak = final_lead["umur_anak"]
+
+        if final_lead.get("whatsapp") and not lead.whatsapp:
+            lead.whatsapp = final_lead["whatsapp"]
 
         # =========================
         # 📊 STATUS & SCORING
@@ -240,7 +366,36 @@ STATUS_LEAD: {current_status}
 
         lead.last_chat = datetime.utcnow()
 
-        
+        # =========================
+        # SUMMARY AUTO
+        # =========================
+        summary_prompt = f"""
+        Buat ringkasan singkat customer berikut.
+
+        Isi:
+        - nama
+        - kebutuhan
+        - minat
+        - kendala
+        - status
+
+        Chat terakhir:
+        User: {message}
+        AI: {reply}
+
+        Max 50 kata.
+        """
+
+        summary_response = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[
+                {"role": "system", "content": summary_prompt}
+            ],
+            max_tokens=100
+        )
+
+        lead.last_summary = summary_response.choices[0].message.content
+
         # =========================
         # 💾 SAVE CONVERSATION
         # =========================
@@ -249,6 +404,7 @@ STATUS_LEAD: {current_status}
             lead_id=lead.id,
             message=message,
             response=reply,
+            raw_response=ai_text,
             created_at=datetime.utcnow()
         ))
         print(

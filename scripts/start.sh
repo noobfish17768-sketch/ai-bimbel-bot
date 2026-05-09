@@ -8,27 +8,6 @@ echo "🚀 STARTING APPLICATION"
 echo "================================="
 
 # =========================
-# WAIT DB (opsional)
-# =========================
-echo "⏳ Waiting for database..."
-sleep 3
-
-# =========================
-# MIGRATIONS
-# =========================
-echo "🚀 Running migrations..."
-alembic upgrade head || {
-    echo "❌ MIGRATION FAILED"
-    exit 1
-}
-
-# =========================
-# SEED
-# =========================
-echo "🌱 Seeding..."
-python scripts/seed_settings.py || echo "⚠️ Seed skipped"
-
-# =========================
 # START SERVER
 # =========================
 echo "🚀 Starting FastAPI app..."

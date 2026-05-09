@@ -20,6 +20,14 @@
             width:100%;
         }
 
+        textarea {
+            padding:10px;
+            margin-top:10px;
+            border-radius:5px;
+            border:1px solid #ccc;
+            width:100%;
+        }
+
         button {
             margin-top:10px;
             padding:10px 15px;
@@ -44,7 +52,7 @@
     </div>
 </div>
 
-<!-- ADD / UPDATE -->
+<!-- SETTINGS -->
 <div class="card">
     <h3>Tambah / Update Setting</h3>
 
@@ -54,7 +62,7 @@
     <button onclick="saveSetting()">Save</button>
 </div>
 
-<!-- LIST SETTINGS -->
+<!-- SETTINGS LIST -->
 <div class="card">
     <h3>Semua Settings</h3>
 
@@ -65,11 +73,120 @@
     </ul>
 </div>
 
+<!-- ========================= -->
+<!-- KNOWLEDGE BASE -->
+<!-- ========================= -->
+<div class="card">
+    <h3>Knowledge Base</h3>
+
+    <input type="hidden" id="knowledge_bot_id" value="{{ bot_id }}">
+
+    <input type="text" id="knowledge_category" placeholder="Category">
+    <input type="text" id="knowledge_title" placeholder="Title">
+
+    <textarea id="knowledge_content"
+              rows="4"
+              placeholder="Content"></textarea>
+
+    <button onclick="createKnowledge()">
+        Save Knowledge
+    </button>
+</div>
+
+<!-- KNOWLEDGE LIST -->
+<div class="card">
+    <h3>Knowledge List</h3>
+
+    {% for item in knowledge_items %}
+
+    <div style="border:1px solid #ddd;padding:15px;border-radius:8px;margin-top:15px;">
+
+        <div style="display:flex;justify-content:space-between;">
+
+            <div>
+                <b>{{ item.title or '-' }}</b>
+                <div style="font-size:12px;color:#777;">
+                    {{ item.category }}
+                </div>
+            </div>
+
+            <button style="background:#e74c3c;"
+                    onclick="deleteKnowledge('{{ item.id }}')">
+                Delete
+            </button>
+
+        </div>
+
+        <hr>
+
+        <div style="white-space:pre-wrap;">
+            {{ item.content }}
+        </div>
+
+    </div>
+
+    {% endfor %}
+</div>
+
+<!-- ========================= -->
+<!-- FAQ -->
+<!-- ========================= -->
+<div class="card">
+    <h3>FAQ</h3>
+
+    <input type="hidden" id="faq_bot_id" value="{{ bot_id }}">
+
+    <input type="text" id="faq_question" placeholder="Question">
+
+    <textarea id="faq_answer"
+              rows="4"
+              placeholder="Answer"></textarea>
+
+    <button onclick="createFaq()">
+        Save FAQ
+    </button>
+</div>
+
+<!-- FAQ LIST -->
+<div class="card">
+    <h3>FAQ List</h3>
+
+    {% for item in faq_items %}
+
+    <div style="border:1px solid #ddd;padding:15px;border-radius:8px;margin-top:15px;">
+
+        <div style="display:flex;justify-content:space-between;">
+
+            <div>
+                <b>{{ item.question }}</b>
+            </div>
+
+            <button style="background:#e74c3c;"
+                    onclick="deleteFaq('{{ item.id }}')">
+                Delete
+            </button>
+
+        </div>
+
+        <hr>
+
+        <div style="white-space:pre-wrap;">
+            {{ item.answer }}
+        </div>
+
+    </div>
+
+    {% endfor %}
+</div>
+
 <script>
+
+// =========================
+// SETTINGS
+// =========================
 async function saveSetting() {
     const key = document.getElementById("key").value;
     const value = document.getElementById("value").value;
-
     const botId = new URLSearchParams(window.location.search).get("bot_id");
 
     if (!key || !value) {
@@ -77,38 +194,112 @@ async function saveSetting() {
         return;
     }
 
-    if (!botId) {
-        alert("Bot belum dipilih");
-        return;
-    }
+    const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            key,
+            value,
+            bot_id: botId
+        })
+    });
 
-    try {
-        const res = await fetch("/api/settings", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                key,
-                value,
-                bot_id: botId
-            })
-        });
+    const data = await res.json();
 
-        const data = await res.json();
-
-        if (data.success) {
-            alert("Berhasil disimpan");
-            location.reload();
-        } else {
-            alert(data.error || "Gagal simpan");
-        }
-
-    } catch (err) {
-        console.error(err);
-        alert("Server error");
+    if (data.success) {
+        location.reload();
+    } else {
+        alert("Gagal simpan");
     }
 }
+
+// =========================
+// KNOWLEDGE
+// =========================
+async function createKnowledge() {
+
+    const payload = {
+        bot_id: document.getElementById("knowledge_bot_id").value,
+        category: document.getElementById("knowledge_category").value,
+        title: document.getElementById("knowledge_title").value,
+        content: document.getElementById("knowledge_content").value
+    }
+
+    const res = await fetch("/api/knowledge/create", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+        location.reload();
+    } else {
+        alert("Gagal save knowledge");
+    }
+}
+
+async function deleteKnowledge(id) {
+
+    if (!confirm("Delete knowledge?")) return;
+
+    const res = await fetch("/api/knowledge/delete", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({id})
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+        location.reload();
+    }
+}
+
+// =========================
+// FAQ
+// =========================
+async function createFaq() {
+
+    const payload = {
+        bot_id: document.getElementById("faq_bot_id").value,
+        question: document.getElementById("faq_question").value,
+        answer: document.getElementById("faq_answer").value
+    }
+
+    const res = await fetch("/api/faq/create", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+        location.reload();
+    } else {
+        alert("Gagal save FAQ");
+    }
+}
+
+async function deleteFaq(id) {
+
+    if (!confirm("Delete FAQ?")) return;
+
+    const res = await fetch("/api/faq/delete", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({id})
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+        location.reload();
+    }
+}
+
 </script>
 
 </body>

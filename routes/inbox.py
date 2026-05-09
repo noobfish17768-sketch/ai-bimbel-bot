@@ -200,8 +200,8 @@ async def manual_reply(
     lead.last_chat = datetime.utcnow()
 
     # 🔥 IMPORTANT: ensure state consistency
-    db.refresh(lead)
     db.commit()
+    db.refresh(lead)
 
     return RedirectResponse(
         f"/inbox?bot_id={bot.id}&lead_id={lead.id}",
