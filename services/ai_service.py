@@ -112,6 +112,19 @@ def extract_lead_data(message):
     if m:
         data["nama_anak"] = m.group(1).title()
 
+    # nomer wa
+    m = re.search(r'(08\d{8,13}|628\d{7,13})', text)
+    if m:
+        whatsapp = m.group(1)
+
+        # convert 08 -> 628
+        if whatsapp.startswith("08"):
+            whatsapp = "62" + whatsapp[1:]
+
+        # validasi panjang nomer
+        if 10 <= len(whatsapp) <= 15:
+            data["whatsapp"] = whatsapp
+
     return data
 
 
@@ -175,6 +188,8 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
         if lead_data.get("umur_anak"):
             lead.umur_anak = lead_data["umur_anak"]
 
+        if lead_data.get("whatsapp") and not lead.whatsapp:
+            lead.whatsapp = lead_data["whatsapp"]
 
         # =========================
         # 💬 LOAD HISTORY
