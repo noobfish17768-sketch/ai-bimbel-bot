@@ -95,28 +95,29 @@ def calculate_score(message, status, prev):
 # LEAD EXTRACTION
 # =========================
 def extract_lead_data(message):
-    text = message.lower()
+    raw = message.lower()
+    clean = raw
 
     # ====================
     # PRE-CLEANING
     # ====================
-    text = re.sub(r'08\d+', '[PHONE]', text)
-    text = re.sub(r'628\d+', '[PHONE]', text)
-    text = re.sub(r'\b\d{1,2}\b', '[NUM]', text)
+    clean = re.sub(r'(08\d{8,13}|628\d{7,13})', '', clean)
+    clean = re.sub(r'\b\d{1,2}\b', '', clean)
 
     data = {}
 
     # nama orang tua
     m = re.search(
         r'\b(aku|saya|sy)\s+([a-zA-Z]{3,20}(?:\s[a-zA-Z]{3,20})?)\b',
-        text
+        clean
     )
 
     if m:
         nama = m.group(2).strip().split()[0]
 
-        # ❌ reject kalau mirip nomor
-        if nama.isdigit():
+        if any(char.isdigit() for char in nama):
+            pass
+        elif nama.lower() in ["phone", "num"]:
             pass
         else:
             data["nama_orangtua"] = nama.title()
@@ -124,7 +125,7 @@ def extract_lead_data(message):
     # umur anak
     m = re.search(
         r'(\d+)\s*(tahun|th)',
-        text
+        raw
     )
 
     if m:
@@ -133,7 +134,7 @@ def extract_lead_data(message):
     # nama anak
     m = re.search(
         r'(namanya|anakku|anak saya)\s+([a-zA-Z ]{2,30})',
-        text
+        clean
     )
 
     if m:
@@ -142,7 +143,7 @@ def extract_lead_data(message):
 
     # nomer wa
     # WA duluan diekstrak sebelum nama
-    m = re.search(r'(08\d{8,13}|628\d{7,13})', text)
+    m = re.search(r'(08\d{8,13}|628\d{7,13})', raw)
     if m:
         whatsapp = m.group(1)
 
