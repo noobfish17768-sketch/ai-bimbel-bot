@@ -90,6 +90,32 @@ def calculate_score(message, status, prev):
 
 
 # =========================
+# LEAD EXTRACTION
+# =========================
+def extract_lead_data(message):
+    text = message.lower()
+
+    data = {}
+
+    # nama orang tua
+    m = re.search(r'aku\s+(\w+)', text)
+    if m:
+        data["nama_orangtua"] = m.group(1).title()
+
+    # umur anak
+    m = re.search(r'usia\s+(\d+)', text)
+    if m:
+        data["umur_anak"] = int(m.group(1))
+
+    # nama anak
+    m = re.search(r'namanya\s+(\w+)', text)
+    if m:
+        data["nama_anak"] = m.group(1).title()
+
+    return data
+
+
+# =========================
 # MAIN AI
 # =========================
 def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt: str):
@@ -132,6 +158,23 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
 
         current_status = lead.status
         prev_score = lead.lead_score
+
+        # =========================
+        # 🧠 EXTRACT LEAD DATA
+        # =========================
+        lead_data = extract_lead_data(message)
+
+        print("EXTRACTED:", lead_data)
+
+        if lead_data.get("nama_orangtua"):
+            lead.nama_orangtua = lead_data["nama_orangtua"]
+
+        if lead_data.get("nama_anak"):
+            lead.nama_anak = lead_data["nama_anak"]
+
+        if lead_data.get("umur_anak"):
+            lead.umur_anak = lead_data["umur_anak"]
+
 
         # =========================
         # 💬 LOAD HISTORY
@@ -182,31 +225,7 @@ STATUS_LEAD: {current_status}
 
         lead.last_chat = datetime.utcnow()
 
-        # =========================
-        # LEAD EXTRACTION
-        # =========================
-        def extract_lead_data(message):
-            text = message.lower()
-
-            data = {}
-
-            # nama orang tua
-            m = re.search(r'aku\s+(\w+)', text)
-            if m:
-                data["nama_orangtua"] = m.group(1).title()
-
-            # umur anak
-            m = re.search(r'usia\s+(\d+)', text)
-            if m:
-                data["umur_anak"] = int(m.group(1))
-
-            # nama anak
-            m = re.search(r'namanya\s+(\w+)', text)
-            if m:
-                data["nama_anak"] = m.group(1).title()
-
-            return data
-
+        
         # =========================
         # 💾 SAVE CONVERSATION
         # =========================
@@ -217,7 +236,12 @@ STATUS_LEAD: {current_status}
             response=reply,
             created_at=datetime.utcnow()
         ))
-
+        print(
+            "BEFORE SAVE:",
+            lead.nama_orangtua,
+            lead.nama_anak,
+            lead.umur_anak
+        )
         db.commit()
 
         return {
