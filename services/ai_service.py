@@ -1,6 +1,7 @@
 import json
 import os
 import openai
+import re
 print("OPENAI FILE:", openai.__file__)
 print("OPENAI VERSION:", openai.__version__)
 from openai import OpenAI
@@ -94,7 +95,7 @@ def calculate_score(message, status, prev):
 def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt: str):
 
     db = SessionLocal()
-
+    
     try:
         user_id = str(user_id)
 
@@ -116,7 +117,7 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
             )
             db.add(lead)
             db.flush()
-
+        
         # =========================
         # 🛑 HUMAN TAKEOVER CHECK
         # =========================
@@ -180,6 +181,31 @@ STATUS_LEAD: {current_status}
             new_score = prev_score
 
         lead.last_chat = datetime.utcnow()
+
+        # =========================
+        # LEAD EXTRACTION
+        # =========================
+        def extract_lead_data(message):
+            text = message.lower()
+
+            data = {}
+
+            # nama orang tua
+            m = re.search(r'aku\s+(\w+)', text)
+            if m:
+                data["nama_orangtua"] = m.group(1).title()
+
+            # umur anak
+            m = re.search(r'usia\s+(\d+)', text)
+            if m:
+                data["umur_anak"] = int(m.group(1))
+
+            # nama anak
+            m = re.search(r'namanya\s+(\w+)', text)
+            if m:
+                data["nama_anak"] = m.group(1).title()
+
+            return data
 
         # =========================
         # 💾 SAVE CONVERSATION
