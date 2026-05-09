@@ -73,7 +73,12 @@ Aturan:
 Output JSON:
 {
   "reply": "...",
-  "lead": {},
+  "lead": {
+    "nama_orangtua": null,
+    "nama_anak": null,
+    "umur_anak": null,
+    "whatsapp": null
+   },
   "status": "NEUTRAL"
 }
 """,
@@ -97,7 +102,12 @@ Aturan:
 Output JSON:
 {
   "reply": "...",
-  "lead": {},
+  "lead": {
+    "nama_orangtua": null,
+    "nama_anak": null,
+    "umur_anak": null,
+    "whatsapp": null
+   },
   "status": "WARM"
 }
 """
