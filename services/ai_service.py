@@ -102,7 +102,7 @@ def detect_intent(message):
 
 
 # =========================
-# SCORE SYSTEM
+# SCORE SYSTEM (FIXED)
 # =========================
 def calculate_score(message, status, prev, last_chat=None):
     msg = message.lower()
@@ -133,19 +133,10 @@ def calculate_score(message, status, prev, last_chat=None):
 
 
 # =========================
-# REQUIRED FIELDS
+# REQUIRED FIELDS (ONLY ONE VERSION)
 # =========================
-def required_fields(status):
-    if status == "HOT":
-        return ["whatsapp", "nama_anak", "umur_anak"]
-
-    if status == "WARM":
-        return ["nama_anak", "umur_anak"]
-
-    return ["nama_orangtua"]
-
-
 def get_required_fields(status, intent, lead):
+
     fields = []
 
     if status == "COLD":
@@ -163,44 +154,40 @@ def get_required_fields(status, intent, lead):
     if intent == "considering":
         fields.append("umur_anak")
 
-    if intent == "buying" and status in ["WARM", "HOT"]:
-        fields.append("whatsapp")
-
     return list(set([f for f in fields if not getattr(lead, f)]))
 
 
 # =========================
-# LEAD EXTRACTION (FIXED SAFE)
+# LEAD EXTRACTION (FIXED SAFE ORDER)
 # =========================
 def extract_lead_data(message):
     raw = message.lower()
-
     normalized = re.sub(r'[\s\-+]', '', raw)
 
     data = {}
 
-    # WA FIRST (IMPORTANT FIX)
+    # WA FIRST (IMPORTANT)
     m = re.search(r'(08\d{8,13}|628\d{8,13})', normalized)
     if m:
-        whatsapp = m.group(1)
-        if whatsapp.startswith("08"):
-            whatsapp = "62" + whatsapp[1:]
-        if 10 <= len(whatsapp) <= 15:
-            data["whatsapp"] = whatsapp
+        wa = m.group(1)
+        if wa.startswith("08"):
+            wa = "62" + wa[1:]
+        if 10 <= len(wa) <= 15:
+            data["whatsapp"] = wa
 
-    # CLEAN AFTER WA REMOVE
+    # CLEAN TEXT AFTER WA REMOVED
     clean = re.sub(r'(08\d{8,13}|628\d{8,13})', '', raw)
     clean = re.sub(r'\b\d{1,2}\b', '', clean)
 
     # ORANG TUA
     m = re.search(r'\b(aku|saya|sy)\s+([a-zA-Z]{3,20}(?:\s[a-zA-Z]{3,20})?)\b', clean)
     if m:
-        nama = m.group(2).strip().split()[0]
+        nama = m.group(2).split()[0]
         if not any(char.isdigit() for char in nama):
             if nama.lower() not in ["phone", "num"]:
                 data["nama_orangtua"] = nama.title()
 
-    # UMUR (RAW SAFE)
+    # UMUR
     m = re.search(r'(\d+)\s*(tahun|th)', raw)
     if m:
         data["umur_anak"] = int(m.group(1))
@@ -208,13 +195,13 @@ def extract_lead_data(message):
     # NAMA ANAK
     m = re.search(r'(namanya|anakku|anak saya)\s+([a-zA-Z ]{2,30})', clean)
     if m:
-        data["nama_anak"] = m.group(2).strip().split()[0].title()
+        data["nama_anak"] = m.group(2).split()[0].title()
 
     return data
 
 
 # =========================
-# MAIN AI ENGINE
+# MAIN ENGINE
 # =========================
 def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt: str):
 
@@ -240,7 +227,6 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
             db.flush()
 
         if hasattr(lead, "ai_enabled") and not lead.ai_enabled:
-            print(f"⛔ AI SKIPPED (lead {lead.id})")
             return None
 
         bot = db.query(Bot).filter(Bot.id == bot_id).first()
@@ -248,45 +234,67 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
         current_status = lead.status
         prev_score = lead.lead_score
 
+        # =====================
+        # EXTRACT
+        # =====================
         lead_data = extract_lead_data(message)
 
+        intent = detect_intent(message)
+
+        new_status = detect_status(message, current_status)
+        new_score = calculate_score(message, new_status, prev_score, lead.last_chat)
+
+        missing_fields = get_required_fields(new_status, intent, lead)
+
+        # =====================
+        # HISTORY
+        # =====================
         history = load_history(db, lead.id)
         history.append({"role": "user", "content": message})
 
-        # LONG TERM MEMORY (SAFE KEEP)
+        # =====================
+        # MEMORY
+        # =====================
         long_term_memory = ""
         if lead.last_summary:
             long_term_memory = f"""
-            =====================
-            LONG TERM MEMORY
-            =====================
+LONG TERM MEMORY:
+{lead.last_summary}
+"""
 
-            {lead.last_summary}
-            """
-
+        # =====================
+        # KB
+        # =====================
         knowledge_items = db.query(BotKnowledge).filter(BotKnowledge.bot_id == bot_id).all()
         faq_items = db.query(BotFAQ).filter(BotFAQ.bot_id == bot_id).all()
 
-        knowledge_text = ""
-        for item in knowledge_items:
-            knowledge_text += f"- {item.title or ''}: {item.content}\n"
+        knowledge_text = "\n".join([f"- {i.content}" for i in knowledge_items])
+        faq_text = "\n".join([f"Q:{f.question} A:{f.answer}" for f in faq_items])
 
-        faq_text = "\n".join([f"Q: {f.question}\nA: {f.answer}" for f in faq_items])
-
+        # =====================
+        # SYSTEM PROMPT (FIX: ADD FOCUS)
+        # =====================
         system_context = f"""
 {system_prompt}
+
+STATUS: {new_status}
+INTENT: {intent}
+
+MISSING_FIELDS_TO_COLLECT:
+{missing_fields}
+
+{long_term_memory}
 
 KNOWLEDGE:
 {knowledge_text}
 
 FAQ:
 {faq_text}
-
-{long_term_memory}
-
-STATUS: {current_status}
 """
 
+        # =====================
+        # AI CALL
+        # =====================
         response = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[{"role": "system", "content": system_context}, *history],
@@ -308,37 +316,21 @@ STATUS: {current_status}
             "whatsapp": ai_lead.get("whatsapp") or lead_data.get("whatsapp"),
         }
 
-        if final_lead.get("nama_orangtua") and not lead.nama_orangtua:
-            lead.nama_orangtua = final_lead["nama_orangtua"]
-
-        if final_lead.get("nama_anak") and not lead.nama_anak:
-            lead.nama_anak = final_lead["nama_anak"]
-
-        if final_lead.get("umur_anak") and not lead.umur_anak:
-            lead.umur_anak = final_lead["umur_anak"]
-
-        if final_lead.get("whatsapp") and not lead.whatsapp:
-            lead.whatsapp = final_lead["whatsapp"]
-
-        # FIX STATUS FLOW
-        new_status = detect_status(message, current_status)
-        new_score = calculate_score(message, new_status, prev_score, lead.last_chat)
+        for k, v in final_lead.items():
+            if v and not getattr(lead, k):
+                setattr(lead, k, v)
 
         lead.status = new_status
         lead.lead_score = new_score
         lead.last_chat = datetime.utcnow()
 
         # SUMMARY
-        summary_prompt = f"""
-Ringkas:
-User: {message}
-AI: {reply}
-max 50 kata
-"""
-
         summary = client.chat.completions.create(
             model="gpt-4.1-mini",
-            messages=[{"role": "system", "content": summary_prompt}],
+            messages=[{
+                "role": "system",
+                "content": f"Ringkas chat: {message} -> {reply}"
+            }],
             max_tokens=100
         )
 
@@ -358,7 +350,8 @@ max 50 kata
         return {
             "reply": reply,
             "status": new_status,
-            "lead_score": new_score
+            "lead_score": new_score,
+            "missing_fields": missing_fields
         }
 
     except Exception as e:
