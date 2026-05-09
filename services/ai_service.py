@@ -96,7 +96,10 @@ def calculate_score(message, status, prev):
 # =========================
 def extract_lead_data(message):
     raw = message.lower()
-    clean = raw
+
+    # normalize nomor (hapus spasi, dash, plus)
+    normalized = re.sub(r'[\s\-]', '', raw)
+    normalized = normalized.replace('+', '')
 
     # ====================
     # PRE-CLEANING
@@ -143,15 +146,14 @@ def extract_lead_data(message):
 
     # nomer wa
     # WA duluan diekstrak sebelum nama
-    m = re.search(r'(08\d{8,13}|628\d{7,13})', raw)
+    m = re.search(r'(08\d{8,13}|628\d{8,13})', normalized)
+
     if m:
         whatsapp = m.group(1)
 
-        # convert 08 -> 628
         if whatsapp.startswith("08"):
             whatsapp = "62" + whatsapp[1:]
 
-        # validasi panjang nomer
         if 10 <= len(whatsapp) <= 15:
             data["whatsapp"] = whatsapp
 
