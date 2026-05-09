@@ -80,7 +80,7 @@ async def update_setting(
     db=Depends(get_db),
     user=Depends(get_current_user_db)
 ):
-    form = await request.form()
+    form = await request.json()
 
     # 🔥 SAFE PARSE
     bot_id_raw = form.get("bot_id")
