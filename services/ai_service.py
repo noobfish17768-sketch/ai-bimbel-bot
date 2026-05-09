@@ -4,6 +4,7 @@ import openai
 import re
 print("OPENAI FILE:", openai.__file__)
 print("OPENAI VERSION:", openai.__version__)
+
 from openai import OpenAI
 from database.database import SessionLocal
 from database.models import LeadDB, Conversation, Bot, BotKnowledge, BotFAQ
@@ -20,7 +21,6 @@ MAX_HISTORY = 6
 # SAFE JSON PARSER
 # =========================
 def safe_parse(text):
-
     text = text.replace("```json", "").replace("```", "").strip()
 
     try:
@@ -75,105 +75,154 @@ def detect_status(message, current):
 
 
 # =========================
-# SCORE
+# FUNNEL
 # =========================
-def calculate_score(message, status, prev):
-    score = prev or 0
+def determine_stage(score):
+    if score >= 80:
+        return "HOT"
+    elif score >= 50:
+        return "WARM"
+    else:
+        return "COLD"
+
+
+# =========================
+# INTENT
+# =========================
+def detect_intent(message):
     msg = message.lower()
 
-    score += 5
+    if any(x in msg for x in ["daftar", "join", "order", "beli"]):
+        return "buying"
+
+    if any(x in msg for x in ["harga", "biaya", "jadwal"]):
+        return "considering"
+
+    return "exploring"
+
+
+# =========================
+# SCORE SYSTEM
+# =========================
+def calculate_score(message, status, prev, last_chat=None):
+    msg = message.lower()
+    score = prev or 0
+
+    if last_chat:
+        hours_passed = (datetime.utcnow() - last_chat).total_seconds() / 3600
+        decay = int(hours_passed // 24) * 3
+        score = max(score - decay, 0)
+
+    score += 2
+
     if status == "WARM":
-        score += 15
-    if status == "HOT":
-        score += 30
-    if any(x in msg for x in ["daftar", "mau", "join", "order"]):
+        score += 10
+    elif status == "HOT":
         score += 20
+
+    if any(x in msg for x in ["daftar", "join", "order", "beli"]):
+        score += 25
+
+    if any(x in msg for x in ["saya mau", "langsung", "sekarang"]):
+        score += 30
+
+    if any(x in msg for x in ["harga", "jadwal", "info"]):
+        score += 10
 
     return min(score, 100)
 
+
 # =========================
-# LEAD EXTRACTION
+# REQUIRED FIELDS
+# =========================
+def required_fields(status):
+    if status == "HOT":
+        return ["whatsapp", "nama_anak", "umur_anak"]
+
+    if status == "WARM":
+        return ["nama_anak", "umur_anak"]
+
+    return ["nama_orangtua"]
+
+
+def get_required_fields(status, intent, lead):
+    fields = []
+
+    if status == "COLD":
+        fields.append("nama_orangtua")
+
+    elif status == "WARM":
+        fields.extend(["nama_anak", "umur_anak"])
+
+    elif status == "HOT":
+        fields.extend(["nama_anak", "umur_anak", "whatsapp"])
+
+    if intent == "buying":
+        fields.append("whatsapp")
+
+    if intent == "considering":
+        fields.append("umur_anak")
+
+    if intent == "buying" and status in ["WARM", "HOT"]:
+        fields.append("whatsapp")
+
+    return list(set([f for f in fields if not getattr(lead, f)]))
+
+
+# =========================
+# LEAD EXTRACTION (FIXED SAFE)
 # =========================
 def extract_lead_data(message):
     raw = message.lower()
-    clean = raw
 
-    # normalize nomor (hapus spasi, dash, plus)
-    normalized = re.sub(r'[\s\-]', '', raw)
-    normalized = normalized.replace('+', '')
-
-    # ====================
-    # PRE-CLEANING
-    # ====================
-    clean = re.sub(r'(08\d{8,13}|628\d{7,13})', '', clean)
-    clean = re.sub(r'\b\d{1,2}\b', '', clean)
+    normalized = re.sub(r'[\s\-+]', '', raw)
 
     data = {}
 
-    # nama orang tua
-    m = re.search(
-        r'\b(aku|saya|sy)\s+([a-zA-Z]{3,20}(?:\s[a-zA-Z]{3,20})?)\b',
-        clean
-    )
+    # WA FIRST (IMPORTANT FIX)
+    m = re.search(r'(08\d{8,13}|628\d{8,13})', normalized)
+    if m:
+        whatsapp = m.group(1)
+        if whatsapp.startswith("08"):
+            whatsapp = "62" + whatsapp[1:]
+        if 10 <= len(whatsapp) <= 15:
+            data["whatsapp"] = whatsapp
 
+    # CLEAN AFTER WA REMOVE
+    clean = re.sub(r'(08\d{8,13}|628\d{8,13})', '', raw)
+    clean = re.sub(r'\b\d{1,2}\b', '', clean)
+
+    # ORANG TUA
+    m = re.search(r'\b(aku|saya|sy)\s+([a-zA-Z]{3,20}(?:\s[a-zA-Z]{3,20})?)\b', clean)
     if m:
         nama = m.group(2).strip().split()[0]
+        if not any(char.isdigit() for char in nama):
+            if nama.lower() not in ["phone", "num"]:
+                data["nama_orangtua"] = nama.title()
 
-        if any(char.isdigit() for char in nama):
-            pass
-        elif nama.lower() in ["phone", "num"]:
-            pass
-        else:
-            data["nama_orangtua"] = nama.title()
-
-    # umur anak
-    m = re.search(
-        r'(\d+)\s*(tahun|th)',
-        raw
-    )
-
+    # UMUR (RAW SAFE)
+    m = re.search(r'(\d+)\s*(tahun|th)', raw)
     if m:
         data["umur_anak"] = int(m.group(1))
 
-    # nama anak
-    m = re.search(
-        r'(namanya|anakku|anak saya)\s+([a-zA-Z ]{2,30})',
-        clean
-    )
-
+    # NAMA ANAK
+    m = re.search(r'(namanya|anakku|anak saya)\s+([a-zA-Z ]{2,30})', clean)
     if m:
-        nama_anak = m.group(2).strip().split()[0]
-        data["nama_anak"] = nama_anak.title()
-
-    # nomer wa
-    # WA duluan diekstrak sebelum nama
-    m = re.search(r'(08\d{8,13}|628\d{8,13})', normalized)
-
-    if m:
-        whatsapp = m.group(1)
-
-        if whatsapp.startswith("08"):
-            whatsapp = "62" + whatsapp[1:]
-
-        if 10 <= len(whatsapp) <= 15:
-            data["whatsapp"] = whatsapp
+        data["nama_anak"] = m.group(2).strip().split()[0].title()
 
     return data
 
 
 # =========================
-# MAIN AI
+# MAIN AI ENGINE
 # =========================
 def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt: str):
 
     db = SessionLocal()
-    
+
     try:
         user_id = str(user_id)
 
-        # =========================
-        # 🔍 GET / CREATE LEAD
-        # =========================
         lead = db.query(LeadDB).filter(
             LeadDB.telegram_id == user_id,
             LeadDB.bot_id == bot_id
@@ -189,34 +238,23 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
             )
             db.add(lead)
             db.flush()
-        
-        # =========================
-        # 🛑 HUMAN TAKEOVER CHECK
-        # =========================
+
         if hasattr(lead, "ai_enabled") and not lead.ai_enabled:
             print(f"⛔ AI SKIPPED (lead {lead.id})")
             return None
 
-        # =========================
-        # 🤖 GET BOT (FIX BUG)
-        # =========================
         bot = db.query(Bot).filter(Bot.id == bot_id).first()
 
         current_status = lead.status
         prev_score = lead.lead_score
 
-        # =========================
-        # 🧠 EXTRACT LEAD DATA
-        # =========================
         lead_data = extract_lead_data(message)
 
-        print("EXTRACTED:", lead_data)
+        history = load_history(db, lead.id)
+        history.append({"role": "user", "content": message})
 
-        # =========================
-        # 🧠 LONG TERM MEMORY
-        # =========================
+        # LONG TERM MEMORY (SAFE KEEP)
         long_term_memory = ""
-
         if lead.last_summary:
             long_term_memory = f"""
             =====================
@@ -226,134 +264,48 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
             {lead.last_summary}
             """
 
-        # =========================
-        # 💬 LOAD HISTORY
-        # =========================
-        history = load_history(db, lead.id)
-        history.append({"role": "user", "content": message})
-
-        # =========================
-        # 🧠 SYSTEM PROMPT
-        # =========================
-        knowledge_items = db.query(BotKnowledge).filter(
-            BotKnowledge.bot_id == bot_id
-        ).all()
-
-        faq_items = db.query(BotFAQ).filter(
-            BotFAQ.bot_id == bot_id
-        ).all()
-
-        knowledge_map = {}
-
-        for item in knowledge_items:
-            cat = item.category or "general"
-
-            if cat not in knowledge_map:
-                knowledge_map[cat] = []
-
-            knowledge_map[cat].append(item)
+        knowledge_items = db.query(BotKnowledge).filter(BotKnowledge.bot_id == bot_id).all()
+        faq_items = db.query(BotFAQ).filter(BotFAQ.bot_id == bot_id).all()
 
         knowledge_text = ""
+        for item in knowledge_items:
+            knowledge_text += f"- {item.title or ''}: {item.content}\n"
 
-        for category, items in knowledge_map.items():
-
-            knowledge_text += f"\n[{category.upper()}]\n"
-
-            for item in items:
-
-                if item.title:
-                    knowledge_text += f"- {item.title}: {item.content}\n"
-                else:
-                    knowledge_text += f"- {item.content}\n"
-
-        faq_text = "\n".join([
-            f"Q: {f.question}\nA: {f.answer}"
-            for f in faq_items
-        ])
-
-        if not knowledge_text:
-            knowledge_text = "Belum ada knowledge base"
-
-        if not faq_text:
-            faq_text = "Belum ada FAQ"
+        faq_text = "\n".join([f"Q: {f.question}\nA: {f.answer}" for f in faq_items])
 
         system_context = f"""
-        {system_prompt}
+{system_prompt}
 
-        =====================
-        KNOWLEDGE BASE
-        =====================
+KNOWLEDGE:
+{knowledge_text}
 
-        {knowledge_text}
+FAQ:
+{faq_text}
 
-        =====================
-        FAQ
-        =====================
+{long_term_memory}
 
-        {faq_text}
+STATUS: {current_status}
+"""
 
-        =====================
-        LEAD MEMORY
-        =====================
-
-        {long_term_memory or "Belum ada summary"}
-        
-        =====================
-        RULES
-        =====================
-
-        - Gunakan knowledge base
-        - Jangan mengarang
-        - Jika data tidak ada, bilang akan dicek admin
-        - Jangan membuat harga sendiri
-        - Jangan membuat jadwal sendiri
-        - Jangan mengarang promo
-        - Jawab berdasarkan knowledge base
-
-        KONDISI: {'CHAT_PERTAMA' if len(history) <= 1 else 'LANJUTAN'}
-        STATUS_LEAD: {current_status}
-        """
-        
-        # =========================
-        # 🤖 AI CALL
-        # =========================
         response = client.chat.completions.create(
             model="gpt-4.1-mini",
-            messages=[
-                {"role": "system", "content": system_context.strip()},
-                *history
-            ],
+            messages=[{"role": "system", "content": system_context}, *history],
             temperature=0.7,
             max_tokens=300
         )
 
         ai_text = response.choices[0].message.content
         data = safe_parse(ai_text)
-        ai_lead = data.get("lead", {})
 
         reply = format_reply(data.get("reply", ""))
 
-        # =========================
-        # MERGE LEAD DATA
-        # PRIORITAS: AI > REGEX
-        # =========================
+        ai_lead = data.get("lead", {})
 
         final_lead = {
-            "nama_orangtua":
-                ai_lead.get("nama_orangtua")
-                or lead_data.get("nama_orangtua"),
-
-            "nama_anak":
-                ai_lead.get("nama_anak")
-                or lead_data.get("nama_anak"),
-
-            "umur_anak":
-                ai_lead.get("umur_anak")
-                or lead_data.get("umur_anak"),
-
-            "whatsapp":
-                ai_lead.get("whatsapp")
-                or lead_data.get("whatsapp")
+            "nama_orangtua": ai_lead.get("nama_orangtua") or lead_data.get("nama_orangtua"),
+            "nama_anak": ai_lead.get("nama_anak") or lead_data.get("nama_anak"),
+            "umur_anak": ai_lead.get("umur_anak") or lead_data.get("umur_anak"),
+            "whatsapp": ai_lead.get("whatsapp") or lead_data.get("whatsapp"),
         }
 
         if final_lead.get("nama_orangtua") and not lead.nama_orangtua:
@@ -368,54 +320,30 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
         if final_lead.get("whatsapp") and not lead.whatsapp:
             lead.whatsapp = final_lead["whatsapp"]
 
-        # =========================
-        # 📊 STATUS & SCORING
-        # =========================
-        if bot and bot.persona_type != "curhat":
-            new_status = detect_status(message, current_status)
-            new_score = calculate_score(message, new_status, prev_score)
+        # FIX STATUS FLOW
+        new_status = detect_status(message, current_status)
+        new_score = calculate_score(message, new_status, prev_score, lead.last_chat)
 
-            lead.status = new_status
-            lead.lead_score = new_score
-        else:
-            new_status = current_status
-            new_score = prev_score
-
+        lead.status = new_status
+        lead.lead_score = new_score
         lead.last_chat = datetime.utcnow()
 
-        # =========================
-        # SUMMARY AUTO
-        # =========================
+        # SUMMARY
         summary_prompt = f"""
-        Buat ringkasan singkat customer berikut.
+Ringkas:
+User: {message}
+AI: {reply}
+max 50 kata
+"""
 
-        Isi:
-        - nama
-        - kebutuhan
-        - minat
-        - kendala
-        - status
-
-        Chat terakhir:
-        User: {message}
-        AI: {reply}
-
-        Max 50 kata.
-        """
-
-        summary_response = client.chat.completions.create(
+        summary = client.chat.completions.create(
             model="gpt-4.1-mini",
-            messages=[
-                {"role": "system", "content": summary_prompt}
-            ],
+            messages=[{"role": "system", "content": summary_prompt}],
             max_tokens=100
         )
 
-        lead.last_summary = summary_response.choices[0].message.content
+        lead.last_summary = summary.choices[0].message.content
 
-        # =========================
-        # 💾 SAVE CONVERSATION
-        # =========================
         db.add(Conversation(
             bot_id=bot_id,
             lead_id=lead.id,
@@ -424,12 +352,7 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
             raw_response=ai_text,
             created_at=datetime.utcnow()
         ))
-        print(
-            "BEFORE SAVE:",
-            lead.nama_orangtua,
-            lead.nama_anak,
-            lead.umur_anak
-        )
+
         db.commit()
 
         return {
