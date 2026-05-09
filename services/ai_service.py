@@ -96,6 +96,7 @@ def calculate_score(message, status, prev):
 # =========================
 def extract_lead_data(message):
     raw = message.lower()
+    clean = raw
 
     # normalize nomor (hapus spasi, dash, plus)
     normalized = re.sub(r'[\s\-]', '', raw)
