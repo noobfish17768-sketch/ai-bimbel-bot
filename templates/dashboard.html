@@ -2,166 +2,314 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Bot</title>
+
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: Inter, sans-serif;
+        }
+    </style>
 </head>
 
-<body class="bg-gray-100">
+<body class="bg-zinc-950 text-white min-h-screen">
 
-<div class="flex h-screen">
+<!-- HEADER -->
+<header class="border-b border-zinc-800 bg-zinc-900/80 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
 
-    <!-- SIDEBAR -->
-    <div class="w-64 bg-gray-900 text-white flex flex-col">
-        <div class="p-5 text-xl font-bold border-b border-gray-700">
-            🚀 CRM Bot
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-blue-500 flex items-center justify-center text-lg font-bold">
+                🤖
+            </div>
+
+            <div>
+                <h1 class="font-semibold text-lg">
+                    CRM Bot
+                </h1>
+
+                <p class="text-xs text-zinc-400">
+                    AI Sales Dashboard
+                </p>
+            </div>
         </div>
 
-        <div class="p-4 space-y-2">
-            <a href="/dashboard" class="block p-2 hover:bg-gray-700 rounded">📊 Dashboard</a>
-            <a href="/inbox?bot_id={{ current_bot_id }}" class="block p-2 hover:bg-gray-700 rounded">💬 Inbox</a>
-            <a href="/conversations?bot_id={{ current_bot_id}}" class="block p-2 hover:bg-gray-700 rounded">💬 Conversations
-            <a href="/settings?bot_id={{ current_bot_id }}" class="block p-2 hover:bg-gray-700 rounded">⚙️ Settings</a>
-            <a href="/admin" class="block p-2 hover:bg-gray-700 rounded">👑 Admin</a>
-            <a href="/logout" class="block p-2 text-red-400 hover:bg-gray-700 rounded">🚪 Logout</a>
+        <div class="flex items-center gap-3">
+
+            <a href="/admin"
+               class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm">
+                Admin
+            </a>
+
+            <a href="/logout"
+               class="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-sm">
+                Logout
+            </a>
+
         </div>
+
+    </div>
+</header>
+
+<!-- MAIN -->
+<main class="max-w-7xl mx-auto px-6 py-8">
+
+    <!-- TOP -->
+    <div class="flex items-center justify-between mb-8">
+
+        <div>
+            <h2 class="text-3xl font-bold">
+                Your Bots
+            </h2>
+
+            <p class="text-zinc-400 mt-1">
+                Manage all your AI sales agents
+            </p>
+        </div>
+
+        <button onclick="openModal()"
+            class="bg-blue-500 hover:bg-blue-600 transition px-5 py-3 rounded-2xl font-medium shadow-lg shadow-blue-500/20">
+            + Create Bot
+        </button>
+
     </div>
 
-    <!-- MAIN -->
-    <div class="flex-1 p-6 overflow-y-auto">
+    <!-- STATS -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
 
-        <!-- HEADER -->
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-2xl font-bold">📊 Dashboard</h1>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+            <p class="text-zinc-400 text-sm">
+                Total Bots
+            </p>
 
-            <button onclick="openModal()"
-                class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                + Bot Baru
-            </button>
+            <h3 class="text-3xl font-bold mt-2">
+                {{ bots|length }}
+            </h3>
         </div>
 
-        <!-- =========================
-        BOT CARDS
-        ========================= -->
-        <div class="grid md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+            <p class="text-zinc-400 text-sm">
+                Total Leads
+            </p>
 
-            {% for bot in bots %}
-            <div class="bg-white p-5 rounded-xl shadow 
-                {% if bot.id == current_bot_id %}border-2 border-blue-500{% endif %}">
+            <h3 class="text-3xl font-bold mt-2">
+                {{ total }}
+            </h3>
+        </div>
 
-                <div class="flex justify-between items-center">
-                    <h3 class="font-semibold">{{ bot.name }}</h3>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+            <p class="text-zinc-400 text-sm">
+                HOT Leads
+            </p>
 
-                    <span class="text-xs">
-                        {% if bot.is_active %}
-                            🟢 Active
-                        {% else %}
-                            🔴 Off
-                        {% endif %}
-                    </span>
+            <h3 class="text-3xl font-bold mt-2 text-red-400">
+                {{ hot }}
+            </h3>
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+            <p class="text-zinc-400 text-sm">
+                WARM Leads
+            </p>
+
+            <h3 class="text-3xl font-bold mt-2 text-yellow-400">
+                {{ warm }}
+            </h3>
+        </div>
+
+    </div>
+
+    <!-- BOT GRID -->
+    <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+
+        {% for bot in bots %}
+
+        <div class="bg-zinc-900 border border-zinc-800 hover:border-blue-500 transition rounded-3xl p-6 group">
+
+            <!-- TOP -->
+            <div class="flex items-start justify-between">
+
+                <div class="flex items-center gap-4">
+
+                    <div class="w-14 h-14 rounded-2xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-2xl">
+                        🤖
+                    </div>
+
+                    <div>
+                        <h3 class="font-semibold text-lg">
+                            {{ bot.name }}
+                        </h3>
+
+                        <p class="text-sm text-zinc-400 capitalize">
+                            {{ bot.persona_type }}
+                        </p>
+                    </div>
+
                 </div>
 
-                <div class="mt-4 flex gap-2">
+                {% if bot.is_active %}
+                    <div class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs border border-emerald-500/20">
+                        Active
+                    </div>
+                {% else %}
+                    <div class="px-3 py-1 rounded-full bg-red-500/10 text-red-400 text-xs border border-red-500/20">
+                        Offline
+                    </div>
+                {% endif %}
 
-                    <button onclick="switchBot({{ bot.id }})"
-                        class="flex-1 bg-gray-100 p-2 rounded text-sm hover:bg-gray-200">
-                        Open
-                    </button>
+            </div>
 
-                    <button onclick="toggleBot({{ bot.id }}, {{ 'true' if bot.is_active else 'false' }})"
-                        class="flex-1 bg-yellow-400 text-white p-2 rounded text-sm">
-                        Toggle
-                    </button>
+            <!-- STATS -->
+            <div class="grid grid-cols-3 gap-3 mt-6">
 
+                <div class="bg-zinc-800 rounded-2xl p-3">
+                    <p class="text-zinc-500 text-xs">
+                        Leads
+                    </p>
+
+                    <h4 class="text-lg font-bold mt-1">
+                        {{ bot.total_leads or 0 }}
+                    </h4>
+                </div>
+
+                <div class="bg-zinc-800 rounded-2xl p-3">
+                    <p class="text-zinc-500 text-xs">
+                        HOT
+                    </p>
+
+                    <h4 class="text-lg font-bold mt-1 text-red-400">
+                        {{ bot.hot_leads or 0 }}
+                    </h4>
+                </div>
+
+                <div class="bg-zinc-800 rounded-2xl p-3">
+                    <p class="text-zinc-500 text-xs">
+                        Revenue
+                    </p>
+
+                    <h4 class="text-lg font-bold mt-1 text-emerald-400">
+                        Rp{{ bot.revenue or 0 }}
+                    </h4>
                 </div>
 
             </div>
-            {% endfor %}
+
+            <!-- ACTIONS -->
+            <div class="flex gap-3 mt-6">
+
+                <a href="/dashboard/{{ bot.id }}"
+                   class="flex-1 bg-blue-500 hover:bg-blue-600 transition rounded-2xl py-3 text-center font-medium">
+                    Open Dashboard
+                </a>
+
+                <button
+                    data-id="{{ bot.id }}"
+                    data-active="{{ bot.is_active }}"
+                    onclick="toggleBot(this.dataset.id, this.dataset.active)"
+                    class="px-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700">
+                    ⚙️
+                </button>
+
+            </div>
 
         </div>
 
-        <!-- =========================
-        KPI
-        ========================= -->
-        <div class="grid grid-cols-4 gap-4 mb-6">
-            <div class="bg-white p-4 rounded shadow"><p>Total</p><b>{{ total }}</b></div>
-            <div class="bg-red-100 p-4 rounded shadow"><p>HOT</p><b>{{ hot }}</b></div>
-            <div class="bg-yellow-100 p-4 rounded shadow"><p>WARM</p><b>{{ warm }}</b></div>
-            <div class="bg-gray-200 p-4 rounded shadow"><p>COLD</p><b>{{ cold }}</b></div>
-        </div>
+        {% endfor %}
 
-        <!-- CHART -->
-        <canvas id="chart"></canvas>
+        <!-- CREATE BOT CARD -->
+        <button onclick="openModal()"
+            class="border-2 border-dashed border-zinc-700 hover:border-blue-500 transition rounded-3xl min-h-[320px] flex flex-col items-center justify-center text-zinc-400 hover:text-white">
 
-        <!-- TABLE -->
-        <table class="w-full mt-6 bg-white rounded shadow">
-            <tr class="bg-gray-100 text-left">
-                <th class="p-2">Nama</th>
-                <th>Anak</th>
-                <th>WA</th>
-                <th>Status</th>
-            </tr>
+            <div class="text-5xl mb-4">
+                +
+            </div>
 
-            {% for lead in leads %}
-            <tr onclick="goToInbox({{ lead.id }})" class="hover:bg-gray-50 cursor-pointer">
-                <td class="p-2">{{ lead.nama_orangtua or '-' }}</td>
-                <td>{{ lead.nama_anak or '-' }}</td>
-                <td>{{ lead.whatsapp }}</td>
-                <td>{{ lead.status }}</td>
-            </tr>
-            {% endfor %}
-        </table>
+            <h3 class="text-lg font-semibold">
+                Create New Bot
+            </h3>
+
+            <p class="text-sm mt-2">
+                Add another AI sales agent
+            </p>
+
+        </button>
 
     </div>
-</div>
 
+</main>
 
-<!-- =========================
-MODAL CREATE BOT
-========================= -->
-<div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+<!-- MODAL -->
+<div id="modal"
+     class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
 
-    <div class="bg-white p-6 rounded-xl w-full max-w-md">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-lg p-6">
 
-        <h2 class="text-lg font-bold mb-4">Tambah Bot</h2>
+        <div class="flex items-center justify-between mb-6">
 
-        <input id="bot_name" placeholder="Nama Bot" class="w-full border p-2 mb-2 rounded">
-        <input id="bot_token" placeholder="Telegram Token" class="w-full border p-2 mb-2 rounded">
+            <div>
+                <h2 class="text-2xl font-bold">
+                    Create Bot
+                </h2>
 
-        <select id="persona" class="w-full border p-2 mb-2 rounded">
-            <option value="bimbel">Bimbel</option>
-            <option value="curhat">Curhat</option>
-            <option value="jualan">Jualan</option>
-        </select>
+                <p class="text-zinc-400 text-sm mt-1">
+                    Setup your new AI sales bot
+                </p>
+            </div>
 
-        <textarea id="prompt" placeholder="System Prompt"
-            class="w-full border p-2 mb-4 rounded"></textarea>
+            <button onclick="closeModal()"
+                    class="text-zinc-500 hover:text-white">
+                ✕
+            </button>
 
-        <div class="flex justify-end gap-2">
-            <button onclick="closeModal()" class="px-4 py-2 bg-gray-200 rounded">Cancel</button>
-            <button onclick="createBot()" class="px-4 py-2 bg-blue-500 text-white rounded">Create</button>
+        </div>
+
+        <div class="space-y-4">
+
+            <input id="bot_name"
+                   placeholder="Bot Name"
+                   class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 outline-none focus:border-blue-500">
+
+            <input id="bot_token"
+                   placeholder="Telegram Token"
+                   class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 outline-none focus:border-blue-500">
+
+            <select id="persona"
+                    class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 outline-none focus:border-blue-500">
+
+                <option value="bimbel">🎓 Bimbel</option>
+                <option value="jualan">🛒 Jualan</option>
+                <option value="curhat">💬 Curhat</option>
+
+            </select>
+
+            <textarea id="prompt"
+                      rows="5"
+                      placeholder="System Prompt"
+                      class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 outline-none focus:border-blue-500"></textarea>
+
+        </div>
+
+        <div class="flex justify-end gap-3 mt-6">
+
+            <button onclick="closeModal()"
+                    class="px-5 py-3 rounded-2xl bg-zinc-800 hover:bg-zinc-700">
+                Cancel
+            </button>
+
+            <button onclick="createBot()"
+                    class="px-5 py-3 rounded-2xl bg-blue-500 hover:bg-blue-600">
+                Create Bot
+            </button>
+
         </div>
 
     </div>
+
 </div>
 
-
-<!-- JS -->
 <script src="/static/dashboard.js"></script>
-
-<script>
-const ctx = document.getElementById("chart");
-
-new Chart(ctx, {
-    type: "bar",
-    data: {
-        labels: ["COLD","WARM","HOT"],
-        datasets: [{
-            data: [{{ cold }}, {{ warm }}, {{ hot }}]
-        }]
-    }
-});
-</script>
 
 </body>
 </html>

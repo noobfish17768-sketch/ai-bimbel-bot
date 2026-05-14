@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ current_bot.name }} • Dashboard</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: Inter, sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-zinc-950 text-white min-h-screen">
+
+<!-- HEADER -->
+<header class="border-b border-zinc-800 bg-zinc-900/80 backdrop-blur sticky top-0 z-50">
+
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+
+        <!-- LEFT -->
+        <div class="flex items-center gap-4">
+
+            <a href="/dashboard"
+               class="w-10 h-10 rounded-2xl bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center">
+                ←
+            </a>
+
+            <div class="w-10 h-10 rounded-2xl bg-blue-500 flex items-center justify-center text-lg font-bold">
+                🤖
+            </div>
+
+            <div>
+
+                <div class="flex items-center gap-3">
+
+                    <h1 class="font-semibold text-lg">
+                        {{ current_bot.name }}
+                    </h1>
+
+                    {% if current_bot.is_active %}
+                    <div class="px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs">
+                        Active
+                    </div>
+                    {% else %}
+                    <div class="px-2 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                        Offline
+                    </div>
+                    {% endif %}
+
+                </div>
+
+                <p class="text-xs text-zinc-400 capitalize">
+                    {{ current_bot.persona_type }} Persona
+                </p>
+
+            </div>
+
+        </div>
+
+        <!-- RIGHT -->
+        <div class="flex items-center gap-3">
+
+            <a href="/inbox?bot_id={{ current_bot.id }}"
+               class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm">
+                Inbox
+            </a>
+
+            <a href="/conversations?bot_id={{ current_bot.id }}"
+               class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm">
+                Conversations
+            </a>
+
+            <a href="/settings?bot_id={{ current_bot.id }}"
+               class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm">
+                Settings
+            </a>
+
+            <button
+                data-id="{{ current_bot.id }}"
+                data-active="{{ current_bot.is_active }}"
+                onclick="toggleBot(this.dataset.id, this.dataset.active)"
+                class="px-4 py-2 rounded-xl bg-yellow-500 hover:bg-yellow-600 text-sm">
+                Toggle
+            </button>
+
+        </div>
+
+    </div>
+
+</header>
+
+<!-- MAIN -->
+<main class="max-w-7xl mx-auto px-6 py-8">
+
+    <!-- HERO -->
+    <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-3xl p-8 mb-8 overflow-hidden relative">
+
+        <div class="relative z-10">
+
+            <p class="text-blue-100 text-sm mb-2">
+                AI SALES DASHBOARD
+            </p>
+
+            <h2 class="text-4xl font-bold mb-3">
+                Welcome back 👋
+            </h2>
+
+            <p class="text-blue-100 max-w-2xl">
+                Monitor leads, conversations, payments, and conversion performance
+                for your AI sales bot in real time.
+            </p>
+
+        </div>
+
+        <div class="absolute right-0 top-0 w-72 h-72 bg-white/10 rounded-full blur-3xl"></div>
+
+    </div>
+
+    <!-- KPI -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+
+            <p class="text-zinc-400 text-sm">
+                Total Leads
+            </p>
+
+            <h3 class="text-3xl font-bold mt-3">
+                {{ total }}
+            </h3>
+
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+
+            <p class="text-zinc-400 text-sm">
+                HOT Leads
+            </p>
+
+            <h3 class="text-3xl font-bold mt-3 text-red-400">
+                {{ hot }}
+            </h3>
+
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+
+            <p class="text-zinc-400 text-sm">
+                WARM Leads
+            </p>
+
+            <h3 class="text-3xl font-bold mt-3 text-yellow-400">
+                {{ warm }}
+            </h3>
+
+        </div>
+
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+
+            <p class="text-zinc-400 text-sm">
+                COLD Leads
+            </p>
+
+            <h3 class="text-3xl font-bold mt-3 text-zinc-300">
+                {{ cold }}
+            </h3>
+
+        </div>
+
+    </div>
+
+    <!-- CHART + INFO -->
+    <div class="grid lg:grid-cols-3 gap-6 mb-8">
+
+        <!-- CHART -->
+        <div class="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+
+            <div class="flex items-center justify-between mb-6">
+
+                <div>
+                    <h3 class="text-xl font-semibold">
+                        Lead Analytics
+                    </h3>
+
+                    <p class="text-zinc-400 text-sm mt-1">
+                        Distribution of your lead funnel
+                    </p>
+                </div>
+
+            </div>
+
+            <canvas id="leadChart" height="120"></canvas>
+
+        </div>
+
+        <!-- QUICK ACTION -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+
+            <h3 class="text-xl font-semibold mb-5">
+                Quick Actions
+            </h3>
+
+            <div class="space-y-3">
+
+                <a href="/inbox?bot_id={{ current_bot.id }}"
+                   class="block w-full bg-zinc-800 hover:bg-zinc-700 rounded-2xl p-4 transition">
+
+                    <div class="flex items-center justify-between">
+
+                        <div>
+                            <p class="font-medium">
+                                Open Inbox
+                            </p>
+
+                            <p class="text-sm text-zinc-400 mt-1">
+                                Chat with leads
+                            </p>
+                        </div>
+
+                        <div class="text-2xl">
+                            💬
+                        </div>
+
+                    </div>
+
+                </a>
+
+                <a href="/settings?bot_id={{ current_bot.id }}"
+                   class="block w-full bg-zinc-800 hover:bg-zinc-700 rounded-2xl p-4 transition">
+
+                    <div class="flex items-center justify-between">
+
+                        <div>
+                            <p class="font-medium">
+                                Bot Settings
+                            </p>
+
+                            <p class="text-sm text-zinc-400 mt-1">
+                                Configure AI & payments
+                            </p>
+                        </div>
+
+                        <div class="text-2xl">
+                            ⚙️
+                        </div>
+
+                    </div>
+
+                </a>
+
+                <a href="/conversations?bot_id={{ current_bot.id }}"
+                   class="block w-full bg-zinc-800 hover:bg-zinc-700 rounded-2xl p-4 transition">
+
+                    <div class="flex items-center justify-between">
+
+                        <div>
+                            <p class="font-medium">
+                                Conversations
+                            </p>
+
+                            <p class="text-sm text-zinc-400 mt-1">
+                                View chat history
+                            </p>
+                        </div>
+
+                        <div class="text-2xl">
+                            📄
+                        </div>
+
+                    </div>
+
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- LEADS -->
+    <div class="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+
+        <!-- TOP -->
+        <div class="p-6 border-b border-zinc-800 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+
+            <div>
+
+                <h3 class="text-xl font-semibold">
+                    Recent Leads
+                </h3>
+
+                <p class="text-zinc-400 text-sm mt-1">
+                    Latest incoming prospects from your bot
+                </p>
+
+            </div>
+
+            <!-- SEARCH -->
+            <form method="GET"
+                  class="flex gap-3">
+
+                <input type="hidden"
+                       name="bot_id"
+                       value="{{ current_bot.id }}">
+
+                <input
+                    type="text"
+                    name="q"
+                    value="{{ q or '' }}"
+                    placeholder="Search name or WhatsApp..."
+                    class="bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-3 outline-none focus:border-blue-500 w-72">
+
+                <button
+                    class="bg-blue-500 hover:bg-blue-600 px-5 rounded-2xl">
+                    Search
+                </button>
+
+            </form>
+
+        </div>
+
+        <!-- TABLE -->
+        <div class="overflow-x-auto">
+
+            <table class="w-full">
+
+                <thead class="bg-zinc-800/50">
+
+                    <tr class="text-left text-sm text-zinc-400">
+
+                        <th class="px-6 py-4 font-medium">
+                            Parent
+                        </th>
+
+                        <th class="px-6 py-4 font-medium">
+                            Child
+                        </th>
+
+                        <th class="px-6 py-4 font-medium">
+                            WhatsApp
+                        </th>
+
+                        <th class="px-6 py-4 font-medium">
+                            Status
+                        </th>
+
+                        <th class="px-6 py-4 font-medium">
+                            Action
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for lead in leads %}
+
+                    <tr class="border-t border-zinc-800 hover:bg-zinc-800/40 transition">
+
+                        <td class="px-6 py-4">
+                            {{ lead.nama_orangtua or '-' }}
+                        </td>
+
+                        <td class="px-6 py-4">
+                            {{ lead.nama_anak or '-' }}
+                        </td>
+
+                        <td class="px-6 py-4">
+                            {{ lead.whatsapp or '-' }}
+                        </td>
+
+                        <td class="px-6 py-4">
+
+                            {% if lead.status == "HOT" %}
+                            <span class="px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                                HOT
+                            </span>
+
+                            {% elif lead.status == "WARM" %}
+                            <span class="px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs">
+                                WARM
+                            </span>
+
+                            {% else %}
+                            <span class="px-3 py-1 rounded-full bg-zinc-700 text-zinc-300 text-xs">
+                                COLD
+                            </span>
+                            {% endif %}
+
+                        </td>
+
+                        <td class="px-6 py-4">
+
+                            <a href="/inbox/{{ lead.id }}"
+                               class="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-sm">
+                                Open
+                            </a>
+
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</main>
+
+<script src="/static/dashboard.js"></script>
+
+<script>
+const ctx = document.getElementById('leadChart');
+
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: ['COLD', 'WARM', 'HOT'],
+        datasets: [{
+            label: 'Leads',
+            data: [{{ cold }}, {{ warm }}, {{ hot }}],
+            borderRadius: 12
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                labels: {
+                    color: 'white'
+                }
+            }
+        },
+        scales: {
+            y: {
+                ticks: {
+                    color: 'white'
+                },
+                grid: {
+                    color: '#27272a'
+                }
+            },
+            x: {
+                ticks: {
+                    color: 'white'
+                },
+                grid: {
+                    color: '#27272a'
+                }
+            }
+        }
+    }
+});
+</script>
+
+</body>
+</html>
