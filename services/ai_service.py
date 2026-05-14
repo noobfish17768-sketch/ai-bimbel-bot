@@ -21,17 +21,29 @@ MAX_HISTORY = 6
 # SAFE JSON PARSER
 # =========================
 def safe_parse(text):
+
+    if not text:
+        return {"reply": ""}
+
     text = text.replace("```json", "").replace("```", "").strip()
 
     try:
         return json.loads(text)
-    except:
-        start = text.find("{")
-        end = text.rfind("}") + 1
+
+    except Exception:
+
         try:
-            return json.loads(text[start:end])
-        except:
-            return {"reply": text}
+            start = text.index("{")
+            end = text.rindex("}") + 1
+            cleaned = text[start:end]
+
+            return json.loads(cleaned)
+
+        except Exception:
+            return {
+                "reply": text,
+                "lead": {}
+            }
 
 
 # =========================
@@ -72,6 +84,32 @@ def detect_status(message, current):
     if any(x in msg for x in ["harga", "jadwal", "info", "berapa", "menu"]):
         return "WARM"
     return current
+
+STATUS_ORDER = {
+    "COLD": 1,
+    "WARM": 2,
+    "HOT": 3,
+    "CLOSING": 4
+}
+
+# =========================
+# PAYMENT DETECT
+# =========================
+def detect_payment_confirmation(message):
+    msg = message.lower()
+
+    keywords = [
+        "sudah transfer",
+        "udah transfer",
+        "bukti transfer",
+        "sudah bayar",
+        "udah bayar",
+        "done transfer",
+        "saya sudah transfer",
+        "sudah tf"
+    ]
+
+    return any(x in msg for x in keywords)
 
 
 # =========================
@@ -119,6 +157,8 @@ def calculate_score(message, status, prev, last_chat=None):
         score += 10
     elif status == "HOT":
         score += 20
+    elif status == "CLOSING":
+        score += 35
 
     if any(x in msg for x in ["daftar", "join", "order", "beli"]):
         score += 25
@@ -162,7 +202,7 @@ def get_required_fields(status, intent, lead):
 # =========================
 def extract_lead_data(message):
     raw = message.lower()
-    normalized = re.sub(r'[\s\-+]', '', raw)
+    normalized = re.sub(r'\D', '', raw)
 
     data = {}
 
@@ -199,6 +239,32 @@ def extract_lead_data(message):
 
     return data
 
+# =========================
+# DETECT CLOSING INTENT
+# =========================
+def detect_closing(message):
+    msg = message.lower()
+
+    closing_keywords = [
+        "mau daftar",
+        "siap bayar",
+        "transfer",
+        "qris",
+        "bayar sekarang",
+        "gas daftar",
+        "ambil slot",
+        "lanjut pembayaran",
+        "fix daftar",
+        "saya transfer",
+        "boleh kirim pembayaran",
+        "ambil paket",
+        "jadi daftar",
+        "deal",
+        "checkout",
+        "lanjut bayar"
+    ]
+
+    return any(x in msg for x in closing_keywords)
 
 # =========================
 # MAIN ENGINE
@@ -232,6 +298,9 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
         bot = db.query(Bot).filter(Bot.id == bot_id).first()
 
         current_status = lead.status
+        if current_status == "CLOSING":
+            new_status = "CLOSING"
+
         prev_score = lead.lead_score
 
         # =====================
@@ -241,11 +310,55 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
 
         intent = detect_intent(message)
 
-        new_status = detect_status(message, current_status)
-        new_score = calculate_score(message, new_status, prev_score, lead.last_chat)
+        is_closing = detect_closing(message)
 
-        missing_fields = get_required_fields(new_status, intent, lead)
+        detected = detect_status(message, current_status)
 
+        if STATUS_ORDER.get(detected, 0) >= STATUS_ORDER.get(current_status, 0):
+            new_status = detected
+        else:
+            new_status = current_status
+
+        missing_fields = []
+
+        if is_closing:
+
+            # saat closing cuma minta data kritikal
+            critical_fields = ["whatsapp"]
+
+            missing_fields = [
+                f for f in critical_fields
+                if not getattr(lead, f)
+            ]
+
+        else:
+            missing_fields = get_required_fields(new_status, intent, lead)
+        
+        if detect_payment_confirmation(message):
+            lead.payment_status = "WAITING_CONFIRMATION"
+
+        # =====================
+        # PAYMENT INFO
+        # =====================
+        payment_info = f"""
+        METODE PEMBAYARAN:
+
+        🏦 Transfer Bank:
+        {getattr(bot, "bank_name", "-")} - {getattr(bot, "rekening", "-")}
+
+        📱 QRIS:
+        {getattr(bot, "qris_url", "-")}
+        """
+
+        if not getattr(bot, "rekening", None):
+            payment_info = """
+            Pembayaran akan dikirim admin secara manual.
+            """
+
+        invoice_id = f"INV-{lead.id}-{int(datetime.utcnow().timestamp())}"
+
+        
+        
         # =====================
         # HISTORY
         # =====================
@@ -272,6 +385,42 @@ LONG TERM MEMORY:
         faq_text = "\n".join([f"Q:{f.question} A:{f.answer}" for f in faq_items])
 
         # =====================
+        # CLOSING MODE
+        # =====================
+
+        closing_prompt = ""
+
+        if is_closing:
+
+            new_status = "CLOSING"
+
+            closing_prompt = f"""
+
+        =====================
+        CLOSING MODE ACTIVE
+        =====================
+
+        Gunakan informasi pembayaran ini:
+
+        {payment_info}
+
+        Instruksi:
+        - Jangan lagi tanya data panjang
+        - Fokus bantu closing
+        - Jelaskan cara pembayaran dengan jelas
+        - Jangan buat nomor rekening baru
+        - Jangan improvisasi
+        - Arahkan user untuk transfer / scan QRIS
+        - Jika user siap bayar → arahkan langsung transfer
+        - DILARANG membalas selain JSON
+        - Jangan gunakan markdown
+        - Jangan gunakan ```json
+        - Output wajib valid JSON
+        """
+            
+        new_score = calculate_score(message, new_status, prev_score, lead.last_chat)
+
+        # =====================
         # SYSTEM PROMPT (FIX: ADD FOCUS)
         # =====================
         system_context = f"""
@@ -290,7 +439,50 @@ KNOWLEDGE:
 
 FAQ:
 {faq_text}
+
+Invoice ID:
+{invoice_id}
+
+=====================
+RULES 
+===================== 
+- Gunakan knowledge base 
+- Jangan mengarang 
+- Jika data tidak ada, bilang akan dicek admin 
+- Jangan membuat harga sendiri 
+- Jangan membuat jadwal sendiri 
+- Jangan mengarang promo 
+- Jawab berdasarkan knowledge base
+- DILARANG membuat rekening sendiri
+- DILARANG membuat QRIS sendiri
+- Gunakan EXACT payment info dari sistem
+- Jika payment info kosong → bilang admin akan mengirim pembayaran
+
+Jika CLOSING_MODE = TRUE:
+- Jangan lagi tanya data
+- Fokus ke:
+  1. konfirmasi minat
+  2. jelaskan harga singkat
+  3. tampilkan metode pembayaran
+  4. arahkan ke pembayaran langsung
+
+Gaya bicara harus seperti sales closing, bukan edukasi.
+
+WAJIB BALAS FORMAT JSON:
+
+{
+  "reply": "...",
+  "lead": {
+     "nama_orangtua": "",
+     "nama_anak": "",
+     "umur_anak": "",
+     "whatsapp": ""
+  }
+}
+
+{closing_prompt}
 """
+        
 
         # =====================
         # AI CALL
@@ -309,11 +501,28 @@ FAQ:
 
         ai_lead = data.get("lead", {})
 
+        if "reply" not in data:
+            data = {
+                "reply": ai_text,
+                "lead": {}
+            }        
+
         final_lead = {
-            "nama_orangtua": ai_lead.get("nama_orangtua") or lead_data.get("nama_orangtua"),
-            "nama_anak": ai_lead.get("nama_anak") or lead_data.get("nama_anak"),
-            "umur_anak": ai_lead.get("umur_anak") or lead_data.get("umur_anak"),
-            "whatsapp": ai_lead.get("whatsapp") or lead_data.get("whatsapp"),
+            "nama_orangtua":
+                lead_data.get("nama_orangtua")
+                or ai_lead.get("nama_orangtua"),
+
+            "nama_anak":
+                lead_data.get("nama_anak")
+                or ai_lead.get("nama_anak"),
+
+            "umur_anak":
+                lead_data.get("umur_anak")
+                or ai_lead.get("umur_anak"),
+
+            "whatsapp":
+                lead_data.get("whatsapp")
+                or ai_lead.get("whatsapp"),
         }
 
         for k, v in final_lead.items():
@@ -324,17 +533,33 @@ FAQ:
         lead.lead_score = new_score
         lead.last_chat = datetime.utcnow()
 
-        # SUMMARY
-        summary = client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[{
-                "role": "system",
-                "content": f"Ringkas chat: {message} -> {reply}"
-            }],
-            max_tokens=100
-        )
+        # SUMMARY MEMORY (hemat token)
+        if lead.message_count > 0 and lead.message_count % 6 == 0:
 
-        lead.last_summary = summary.choices[0].message.content
+            summary = client.chat.completions.create(
+                model="gpt-4.1-mini",
+                messages=[{
+                    "role": "system",
+                    "content": f"""
+                    Ringkas customer berikut.
+
+                    User: {message}
+                    AI: {reply}
+
+                    Fokus:
+                    - nama
+                    - minat
+                    - kebutuhan
+                    - status
+                    - progress closing
+
+                    Max 50 kata.
+                    """
+                }],
+                max_tokens=100
+            )
+
+            lead.last_summary = summary.choices[0].message.content
 
         db.add(Conversation(
             bot_id=bot_id,
@@ -344,6 +569,8 @@ FAQ:
             raw_response=ai_text,
             created_at=datetime.utcnow()
         ))
+
+        lead.message_count = (lead.message_count or 0) + 1
 
         db.commit()
 

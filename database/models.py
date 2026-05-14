@@ -3,6 +3,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
 from database.database import Base
+from datetime import datetime
 
 
 # =========================
@@ -49,6 +50,16 @@ class Bot(Base):
 
     persona_type = Column(String, default="bimbel")  # 🔥 tambah default
     system_prompt = Column(Text)
+
+    payment_enabled = Column(Boolean, default=True)
+
+    payment_transfer_enabled = Column(Boolean, default=True)
+    payment_qris_enabled = Column(Boolean, default=False)
+
+    bank_name = Column(String)
+    rekening = Column(String)
+
+    qris_url = Column(Text)
 
     is_active = Column(Boolean, default=True)
     is_deleted = Column(Boolean, default=False)
@@ -104,11 +115,13 @@ class LeadDB(Base):
     minat = Column(Text)
     intent = Column(Text)
     last_summary = Column(Text)
+    payment_status = Column(String, default="UNPAID")
 
     created_at = Column(DateTime, server_default=func.now())
     last_chat = Column(DateTime, server_default=func.now())
 
     followup_count = Column(Integer, default=0)
+    message_count = Column(Integer, default=0)
     lead_score = Column(Integer, default=0)
     is_human_takeover = Column(Boolean, default=False)
     ai_enabled = Column(Boolean, default=True)
@@ -210,3 +223,37 @@ class BotFAQ(Base):
             name='unique_bot_question'
         ),
     )
+
+# =========================
+# INVOICE
+# =========================
+class Invoice(Base):
+    __tablename__ = "invoices"
+
+    id = Column(Integer, primary_key=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    bot_id = Column(Integer)
+
+    invoice_code = Column(String, unique=True)
+    amount = Column(Integer)
+
+    status = Column(String, default="UNPAID")  
+    # UNPAID | PENDING | PAID | EXPIRED
+
+    payment_method = Column(String)  # BANK / QRIS
+    created_at = Column(DateTime, default=datetime.utcnow)
+    paid_at = Column(DateTime, nullable=True)
+
+# =========================
+# PAYMENT
+# =========================
+class PaymentLog(Base):
+    __tablename__ = "payment_logs"
+
+    id = Column(Integer, primary_key=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"))
+
+    status = Column(String)
+    raw_payload = Column(Text)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
