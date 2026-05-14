@@ -33,11 +33,16 @@ def dashboard_home(
     ).group_by(LeadDB.bot_id).subquery()
 
     bots = db.query(
-        Bot,
-        func.coalesce(lead_stats.c.total_leads, 0),
-        func.coalesce(lead_stats.c.hot_leads, 0),
-        func.coalesce(lead_stats.c.revenue, 0),
-        func.coalesce(lead_stats.c.cost, 0),
+        Bot.id.label("id"),
+        Bot.name.label("name"),
+        Bot.persona_type.label("persona_type"),
+        Bot.is_active.label("is_active"),
+
+        func.coalesce(lead_stats.c.total_leads, 0).label("total_leads"),
+        func.coalesce(lead_stats.c.hot_leads, 0).label("hot_leads"),
+        func.coalesce(lead_stats.c.revenue, 0).label("revenue"),
+        func.coalesce(lead_stats.c.cost, 0).label("cost"),
+
         (
             func.coalesce(lead_stats.c.revenue, 0) -
             func.coalesce(lead_stats.c.cost, 0)
@@ -61,7 +66,6 @@ def dashboard_home(
 
             "total_leads": b.total_leads or 0,
             "hot_leads": b.hot_leads or 0,
-
             "profit": b.profit or 0,
         })
 
