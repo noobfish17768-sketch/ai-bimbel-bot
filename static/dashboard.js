@@ -6,50 +6,44 @@ function closeModal() {
     document.getElementById("modal").classList.add("hidden");
 }
 
-async function toggleBot(botId, currentStatus) {
+async function toggleBot(el) {
 
-    console.log("RAW INPUT:", { botId, currentStatus });
+    const botId = Number(el.dataset.id);
+    const currentStatus = el.dataset.active === "true";
 
-    // FORCE BOOLEAN CLEAN
-    const isActive = String(currentStatus).toLowerCase() === "true";
+    const newStatus = !currentStatus;
 
-    const payload = {
-        bot_id: parseInt(botId),
-        is_active: !isActive
-    };
-
-    console.log("FINAL PAYLOAD:", payload);
+    console.log("SENDING:", {
+        bot_id: botId,
+        is_active: newStatus,
+        types: {
+            bot_id: typeof botId,
+            is_active: typeof newStatus
+        }
+    });
 
     const res = await fetch("/api/bot/toggle", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+            bot_id: botId,
+            is_active: newStatus   // 🔥 HARUS BOOLEAN ASLI
+        })
     });
 
-    const text = await res.text(); // IMPORTANT DEBUG STEP
+    const data = await res.json();
 
-    console.log("RAW RESPONSE:", text);
-
-    let data;
-    try {
-        data = JSON.parse(text);
-    } catch (e) {
-        console.error("Response bukan JSON valid");
-        return;
-    }
-
-    console.log("PARSED:", data);
+    console.log("RESPONSE:", data);
 
     if (!res.ok) {
-        alert(data.detail || "422 Error");
+        console.error("ERROR DETAIL:", data);
+        alert(data.detail || "Toggle gagal");
         return;
     }
 
-    if (data.success) {
-        location.reload();
-    }
+    location.reload();
 }
 
 async function createBot() {
