@@ -8,8 +8,8 @@ function closeModal() {
 
 async function toggleBot(botId, currentStatus) {
 
-    // paksa boolean
-    currentStatus = currentStatus === true || currentStatus === "true";
+    // FIX: paksa number → boolean
+    currentStatus = Number(currentStatus) === 1;
 
     const newStatus = !currentStatus;
 
@@ -21,7 +21,7 @@ async function toggleBot(botId, currentStatus) {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                bot_id: botId,
+                bot_id: Number(botId),
                 is_active: newStatus
             })
         });
@@ -33,7 +33,7 @@ async function toggleBot(botId, currentStatus) {
         if (data.success) {
             location.reload();
         } else {
-            alert("Gagal toggle bot");
+            alert(data.detail || "Gagal toggle bot");
         }
 
     } catch (err) {
