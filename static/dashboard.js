@@ -26,6 +26,7 @@ async function toggleBot(el) {
 
     const data = await res.json();
 
+    console.log("TOGGLE VERSION 2.0 LOADED");
     console.log(data);
 
     if (!res.ok) {
