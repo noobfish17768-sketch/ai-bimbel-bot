@@ -206,8 +206,8 @@
 
                 <button
                     data-id="{{ bot.id }}"
-                    data-active="{{ 1 if bot.is_active else 0 }}"
-                    onclick="toggleBot(this.dataset.id, Number(this.dataset.active))"
+                    data-active="{{ bot.is_active | tojson }}"
+                    onclick="toggleBot(Number(this.dataset.id), this.dataset.active)"
                     class="px-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700">
                     ⚙️
                 </button>
