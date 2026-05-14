@@ -13,32 +13,22 @@ async function toggleBot(el) {
 
     const newStatus = !currentStatus;
 
-    console.log("SENDING:", {
-        bot_id: botId,
-        is_active: newStatus,
-        types: {
-            bot_id: typeof botId,
-            is_active: typeof newStatus
-        }
-    });
-
     const res = await fetch("/api/bot/toggle", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            bot_id: botId,
-            is_active: newStatus   // 🔥 HARUS BOOLEAN ASLI
+            bot_id: botId,        // ✅ int
+            is_active: newStatus  // ✅ boolean
         })
     });
 
     const data = await res.json();
 
-    console.log("RESPONSE:", data);
+    console.log(data);
 
     if (!res.ok) {
-        console.error("ERROR DETAIL:", data);
         alert(data.detail || "Toggle gagal");
         return;
     }
