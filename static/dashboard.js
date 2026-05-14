@@ -8,21 +8,17 @@ function closeModal() {
 
 async function toggleBot(botId, currentStatus) {
 
-    console.log("RAW:", { botId, currentStatus });
+    console.log("RAW INPUT:", { botId, currentStatus });
 
-    // normalize semua kemungkinan input
-    const isActive =
-        currentStatus === true ||
-        currentStatus === "true" ||
-        currentStatus === "1" ||
-        currentStatus === 1;
+    // FORCE BOOLEAN CLEAN
+    const isActive = String(currentStatus).toLowerCase() === "true";
 
     const payload = {
-        bot_id: Number(botId),
-        is_active: Boolean(!isActive)
+        bot_id: parseInt(botId),
+        is_active: !isActive
     };
 
-    console.log("SENDING:", payload);
+    console.log("FINAL PAYLOAD:", payload);
 
     const res = await fetch("/api/bot/toggle", {
         method: "POST",
@@ -32,13 +28,22 @@ async function toggleBot(botId, currentStatus) {
         body: JSON.stringify(payload)
     });
 
-    const data = await res.json();
+    const text = await res.text(); // IMPORTANT DEBUG STEP
 
-    console.log("RESPONSE:", data);
+    console.log("RAW RESPONSE:", text);
+
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch (e) {
+        console.error("Response bukan JSON valid");
+        return;
+    }
+
+    console.log("PARSED:", data);
 
     if (!res.ok) {
-        console.error("SERVER ERROR:", data);
-        alert(data.detail || "Request failed");
+        alert(data.detail || "422 Error");
         return;
     }
 
