@@ -123,6 +123,7 @@ def bot_dashboard(
             "warm": warm,
             "cold": cold,
             "total": total,
-            "page": page
+            "page": page,
+            "q" : q
         }
     )
