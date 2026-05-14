@@ -8,31 +8,42 @@ function closeModal() {
 
 async function toggleBot(botId, currentStatus) {
 
-    console.log("DEBUG:", { botId, currentStatus });
+    console.log("RAW:", { botId, currentStatus });
 
-    currentStatus = String(currentStatus) === "true";
+    // normalize semua kemungkinan input
+    const isActive =
+        currentStatus === true ||
+        currentStatus === "true" ||
+        currentStatus === "1" ||
+        currentStatus === 1;
 
-    const newStatus = !currentStatus;
+    const payload = {
+        bot_id: Number(botId),
+        is_active: Boolean(!isActive)
+    };
+
+    console.log("SENDING:", payload);
 
     const res = await fetch("/api/bot/toggle", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-            bot_id: Number(botId),
-            is_active: newStatus
-        })
+        body: JSON.stringify(payload)
     });
 
     const data = await res.json();
 
-    console.log("response:", data);
+    console.log("RESPONSE:", data);
+
+    if (!res.ok) {
+        console.error("SERVER ERROR:", data);
+        alert(data.detail || "Request failed");
+        return;
+    }
 
     if (data.success) {
         location.reload();
-    } else {
-        alert(data.detail || "Gagal toggle");
     }
 }
 

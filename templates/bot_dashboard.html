@@ -82,8 +82,8 @@
 
             <button
                 data-id="{{ bot.id }}"
-                data-active="{{ bot.is_active | tojson }}"
-                onclick="toggleBot(Number(this.dataset.id), this.dataset.active)"
+                data-active="{{ 'true' if bot.is_active else 'false' }}"
+                onclick="toggleBot(this.dataset.id, this.dataset.active)"
                 class="px-4 py-2 rounded-xl bg-yellow-500 hover:bg-yellow-600 text-sm">
                 Toggle
             </button>
