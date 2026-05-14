@@ -1,18 +1,49 @@
-from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 
 from database.models import LeadDB, Bot
 from core.dependencies import get_db
-from core.security import get_current_user_web, get_current_bot
+from core.security import get_current_user_web
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
 
+# =========================
+# BOT SELECTOR PAGE
+# =========================
 @router.get("/dashboard")
-def dashboard(
+def dashboard_home(
+    request: Request,
+    db=Depends(get_db)
+):
+    user = get_current_user_web(request, db)
+
+    if not hasattr(user, "id"):
+        return user
+
+    bots = db.query(Bot).filter(
+        (Bot.owner_id == user.id) |
+        (Bot.user_id == user.id)
+    ).all()
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "bots": bots
+        }
+    )
+
+
+# =========================
+# SINGLE BOT DASHBOARD
+# =========================
+@router.get("/dashboard/{bot_id}")
+def bot_dashboard(
+    bot_id: int,
     request: Request,
     status: str = None,
     q: str = None,
@@ -25,25 +56,25 @@ def dashboard(
         return user
 
     # =========================
-    # 🔍 GET BOT (SAFE)
+    # GET BOT
     # =========================
-    bot = get_current_bot(request, user, db)
+    bot = db.query(Bot).filter(
+        Bot.id == bot_id,
+        (
+            (Bot.owner_id == user.id) |
+            (Bot.user_id == user.id)
+        )
+    ).first()
 
     if not bot:
-        # fallback ambil bot pertama milik user
-        bot = db.query(Bot).filter(
-            (Bot.owner_id == user.id) | (Bot.user_id == user.id)
-        ).first()
-
-        if not bot:
-            return RedirectResponse("/create", status_code=302)
-
-    bot_id = bot.id
+        return RedirectResponse("/dashboard")
 
     # =========================
-    # 📊 BASE QUERY
+    # STATS
     # =========================
-    base = db.query(LeadDB).filter(LeadDB.bot_id == bot_id)
+    base = db.query(LeadDB).filter(
+        LeadDB.bot_id == bot_id
+    )
 
     stats = db.query(
         LeadDB.status,
@@ -61,7 +92,9 @@ def dashboard(
     query = base
 
     if status:
-        query = query.filter(LeadDB.status == status)
+        query = query.filter(
+            LeadDB.status == status
+        )
 
     if q:
         query = query.filter(
@@ -71,34 +104,25 @@ def dashboard(
 
     per_page = 10
 
-    leads = query.order_by(LeadDB.created_at.desc()) \
-        .offset((page - 1) * per_page) \
-        .limit(per_page) \
-        .all()
+    leads = query.order_by(
+        LeadDB.created_at.desc()
+    ).offset(
+        (page - 1) * per_page
+    ).limit(per_page).all()
 
     total = query.count()
 
-    # =========================
-    # 🤖 BOT LIST (CONSISTENT)
-    # =========================
-    bots = db.query(Bot).filter(
-        (Bot.owner_id == user.id) | (Bot.user_id == user.id)
-    ).all()
-
     return templates.TemplateResponse(
-        "dashboard.html",
+        "bot_dashboard.html",
         {
             "request": request,
+            "bot": bot,
+            "bot_id": bot.id,
             "leads": leads,
             "hot": hot,
             "warm": warm,
             "cold": cold,
             "total": total,
-            "page": page,
-            "bot_id": bot_id,
-            "bots": bots,
-            "current_bot": bot,
-            "current_bot_id": bot_id,
-            "bot_active": bot.is_active
+            "page": page
         }
     )
