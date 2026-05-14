@@ -29,11 +29,36 @@ def dashboard_home(
         (Bot.user_id == user.id)
     ).all()
 
+    # =========================
+    # ADD THIS COUNT BLOCK HERE
+    # =========================
+    stats = db.query(
+        LeadDB.status,
+        func.count().label("count")
+    ).join(Bot, Bot.id == LeadDB.bot_id).filter(
+        (Bot.owner_id == user.id) |
+        (Bot.user_id == user.id)
+    ).group_by(LeadDB.status).all()
+
+    counts = {s.status: s.count for s in stats}
+
+    hot = counts.get("HOT", 0)
+    warm = counts.get("WARM", 0)
+    cold = counts.get("COLD", 0)
+    total = sum(counts.values())
+
+    # =========================
+    # RETURN TEMPLATE
+    # =========================
     return templates.TemplateResponse(
         "dashboard.html",
         {
             "request": request,
-            "bots": bots
+            "bots": bots,
+            "hot": hot,
+            "warm": warm,
+            "cold": cold,
+            "total": total
         }
     )
 
