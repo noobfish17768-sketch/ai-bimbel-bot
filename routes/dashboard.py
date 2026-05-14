@@ -24,29 +24,45 @@ def dashboard_home(
     if not hasattr(user, "id"):
         return user
 
-    bots = db.query(
-        Bot,
+    lead_stats = db.query(
+        LeadDB.bot_id.label("bot_id"),
         func.count(LeadDB.id).label("total_leads"),
         func.sum(case((LeadDB.status == "HOT", 1), else_=0)).label("hot_leads"),
-        func.coalesce(func.sum(LeadDB.revenue), 0).label("revenue")
+        func.coalesce(func.sum(LeadDB.revenue), 0).label("revenue"),
+        func.coalesce(func.sum(LeadDB.cost), 0).label("cost"),
+    ).group_by(LeadDB.bot_id).subquery()
+
+    bots = db.query(
+        Bot,
+        func.coalesce(lead_stats.c.total_leads, 0),
+        func.coalesce(lead_stats.c.hot_leads, 0),
+        func.coalesce(lead_stats.c.revenue, 0),
+        func.coalesce(lead_stats.c.cost, 0),
+        (
+            func.coalesce(lead_stats.c.revenue, 0) -
+            func.coalesce(lead_stats.c.cost, 0)
+        ).label("profit")
     ).outerjoin(
-        LeadDB, LeadDB.bot_id == Bot.id
+        lead_stats,
+        lead_stats.c.bot_id == Bot.id
     ).filter(
         (Bot.owner_id == user.id) |
         (Bot.user_id == user.id)
-    ).group_by(Bot.id).all()
+    ).all()
 
     bot_list = []
 
-    for bot, total_leads, hot_leads, revenue in bots:
+    for b in bots:
         bot_list.append({
-            "id": bot.id,
-            "name": bot.name,
-            "persona_type": bot.persona_type,
-            "is_active": bot.is_active,
-            "total_leads": total_leads or 0,
-            "hot_leads": hot_leads or 0,
-            "revenue": revenue or 0,
+            "id": b.id,
+            "name": b.name,
+            "persona_type": b.persona_type,
+            "is_active": b.is_active,
+
+            "total_leads": b.total_leads or 0,
+            "hot_leads": b.hot_leads or 0,
+
+            "profit": b.profit or 0,
         })
 
     # =========================

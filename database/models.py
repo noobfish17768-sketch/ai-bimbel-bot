@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, UniqueConstraint, Index
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, ForeignKey, Boolean, UniqueConstraint, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -60,6 +60,7 @@ class Bot(Base):
     rekening = Column(String)
 
     qris_url = Column(Text)
+    payment_notes = Column(Text)
 
     is_active = Column(Boolean, default=True)
     is_deleted = Column(Boolean, default=False)
@@ -110,12 +111,15 @@ class LeadDB(Base):
     nama_anak = Column(String)
     umur_anak = Column(Integer)
 
-    status = Column(String, default="COLD", index=True)
+    status = Column(String(20), default="COLD", index=True)
     notes = Column(Text)
     minat = Column(Text)
     intent = Column(Text)
     last_summary = Column(Text)
     payment_status = Column(String, default="UNPAID")
+    invoice_id = Column(String, nullable=True, index=True)
+    revenue = Column(BigInteger, default=0)
+    cost = Column(BigInteger, default=0)
 
     created_at = Column(DateTime, server_default=func.now())
     last_chat = Column(DateTime, server_default=func.now())
@@ -157,8 +161,9 @@ class Conversation(Base):
     bot = relationship("Bot")
     lead = relationship("LeadDB", back_populates="conversations")
 
-    Index('idx_conversation_lead', 'lead_id', 'created_at')
-
+    __table_args__ = (
+        Index('idx_conversation_lead', 'lead_id', 'created_at')
+    )
 
 # =========================
 # ⚙️ BOT SETTINGS
@@ -197,7 +202,9 @@ class BotKnowledge(Base):
 
     is_deleted = Column(Boolean, default=False)
 
-    
+    __table_args__ = (
+        Index('idx_botknowledge_bot', 'bot_id'),
+    )
 # =========================
 # ⚙️ BOT FAQ
 # =========================
@@ -222,6 +229,7 @@ class BotFAQ(Base):
             'question',
             name='unique_bot_question'
         ),
+        Index('idx_botfaq_bot', 'bot_id'),
     )
 
 # =========================
@@ -244,6 +252,9 @@ class Invoice(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     paid_at = Column(DateTime, nullable=True)
 
+    lead = relationship("LeadDB")
+    payments = relationship("PaymentLog", cascade="all, delete")
+
 # =========================
 # PAYMENT
 # =========================
@@ -257,3 +268,5 @@ class PaymentLog(Base):
     raw_payload = Column(Text)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    invoice = relationship("Invoice")
