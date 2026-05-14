@@ -133,7 +133,8 @@ def toggle_bot(
     db=Depends(get_db),
     current_user: User = Depends(get_current_user_db)
 ):
-
+    print("🔥 RAW REQUEST:", data)
+    
     bot = db.query(Bot).filter(
         Bot.id == data.bot_id,
         (
