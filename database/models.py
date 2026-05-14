@@ -158,11 +158,11 @@ class Conversation(Base):
     created_at = Column(DateTime, server_default=func.now(), index=True)
 
     # 🔥 RELATION TAMBAHAN (penting)
-    bot = relationship("Bot")
+    bot = relationship("Bot", foreign_keys=[bot_id])
     lead = relationship("LeadDB", back_populates="conversations")
 
     __table_args__ = (
-        Index('idx_conversation_lead', 'lead_id', 'created_at')
+        Index('idx_conversation_lead', 'lead_id', 'created_at'),
     )
 
 # =========================
@@ -240,7 +240,7 @@ class Invoice(Base):
 
     id = Column(Integer, primary_key=True)
     lead_id = Column(Integer, ForeignKey("leads.id"))
-    bot_id = Column(Integer)
+    bot_id = Column(Integer, ForeignKey("bots.id"))
 
     invoice_code = Column(String, unique=True)
     amount = Column(Integer)
