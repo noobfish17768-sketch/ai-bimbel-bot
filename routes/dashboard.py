@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func
+from sqlalchemy import func, case
 
 from database.models import LeadDB, Bot
 from core.dependencies import get_db
@@ -24,10 +24,30 @@ def dashboard_home(
     if not hasattr(user, "id"):
         return user
 
-    bots = db.query(Bot).filter(
+    bots = db.query(
+        Bot,
+        func.count(LeadDB.id).label("total_leads"),
+        func.sum(case((LeadDB.status == "HOT", 1), else_=0)).label("hot_leads"),
+        func.coalesce(func.sum(LeadDB.revenue), 0).label("revenue")
+    ).outerjoin(
+        LeadDB, LeadDB.bot_id == Bot.id
+    ).filter(
         (Bot.owner_id == user.id) |
         (Bot.user_id == user.id)
-    ).all()
+    ).group_by(Bot.id).all()
+
+    bot_list = []
+
+    for bot, total_leads, hot_leads, revenue in bots:
+        bot_list.append({
+            "id": bot.id,
+            "name": bot.name,
+            "persona_type": bot.persona_type,
+            "is_active": bot.is_active,
+            "total_leads": total_leads or 0,
+            "hot_leads": hot_leads or 0,
+            "revenue": revenue or 0,
+        })
 
     # =========================
     # ADD THIS COUNT BLOCK HERE
@@ -54,7 +74,7 @@ def dashboard_home(
         "dashboard.html",
         {
             "request": request,
-            "bots": bots,
+            "bots": bot_list,   # ← INI YANG DIPAKAI
             "hot": hot,
             "warm": warm,
             "cold": cold,
