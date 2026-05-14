@@ -1,9 +1,6 @@
 import json
 import os
-import openai
 import re
-print("OPENAI FILE:", openai.__file__)
-print("OPENAI VERSION:", openai.__version__)
 
 from openai import OpenAI
 from database.database import SessionLocal
@@ -14,7 +11,7 @@ from datetime import datetime
 load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-MAX_HISTORY = 6
+MAX_HISTORY = 4
 
 
 # =========================
@@ -145,6 +142,7 @@ def detect_intent(message):
 def calculate_score(message, status, prev, last_chat=None):
     msg = message.lower()
     score = prev or 0
+    short_msgs = ["ok", "ya", "iya", "sip", "hmm", "halo"]
 
     if last_chat:
         hours_passed = (datetime.utcnow() - last_chat).total_seconds() / 3600
@@ -169,7 +167,10 @@ def calculate_score(message, status, prev, last_chat=None):
     if any(x in msg for x in ["harga", "jadwal", "info"]):
         score += 10
 
-    return min(score, 100)
+    if msg.strip() in short_msgs:
+        score -= 3
+
+    return max(0, min(score, 100))
 
 
 # =========================
@@ -202,12 +203,12 @@ def get_required_fields(status, intent, lead):
 # =========================
 def extract_lead_data(message):
     raw = message.lower()
-    normalized = re.sub(r'\D', '', raw)
+    phone_only = re.sub(r'\D', '', raw)
 
     data = {}
 
     # WA FIRST (IMPORTANT)
-    m = re.search(r'(08\d{8,13}|628\d{8,13})', normalized)
+    m = re.search(r'(08\d{8,13}|628\d{8,13})', phone_only)
     if m:
         wa = m.group(1)
         if wa.startswith("08"):
@@ -220,7 +221,10 @@ def extract_lead_data(message):
     clean = re.sub(r'\b\d{1,2}\b', '', clean)
 
     # ORANG TUA
-    m = re.search(r'\b(aku|saya|sy)\s+([a-zA-Z]{3,20}(?:\s[a-zA-Z]{3,20})?)\b', clean)
+    m = re.search(
+        r'(nama saya|aku|saya|sy)\s+([a-zA-Z]{2,25}(?:\s[a-zA-Z]{2,25})?)',
+        clean
+    )
     if m:
         nama = m.group(2).split()[0]
         if not any(char.isdigit() for char in nama):
@@ -267,6 +271,68 @@ def detect_closing(message):
     return any(x in msg for x in closing_keywords)
 
 # =========================
+# FILTER FAQ
+# =========================
+def filter_relevant_faqs(message, faq_items):
+
+    msg = message.lower()
+    scored = []
+    seen = set()
+
+    for faq in faq_items:
+
+        score = 0
+        text = f"{faq.question} {faq.answer}".lower()
+        key = faq.question.lower().strip()
+
+        if key in seen:
+            continue
+
+        for word in msg.split():
+
+            word = word.strip()
+
+            if len(word) < 4:
+                continue
+
+            if word in text:
+                score += 1
+
+        scored.append((score, faq))
+        seen.add(key)
+
+    scored.sort(reverse=True, key=lambda x: x[0])
+
+    return [x[1] for x in scored[:3]]
+
+# =========================
+# FILTER KNOWLEDGE
+# =========================
+def filter_relevant_knowledge(message, items):
+
+    msg = message.lower()
+    scored = []
+
+    for item in items:
+
+        score = 0
+        text = item.content.lower()
+
+        for word in msg.split():
+
+            if len(word) < 4:
+                continue
+
+            if word in text:
+                score += 1
+
+        scored.append((score, item))
+
+    scored.sort(reverse=True, key=lambda x: x[0])
+
+    return [x[1] for x in scored if x[0] > 0][:5]
+
+# =========================
 # MAIN ENGINE
 # =========================
 def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt: str):
@@ -298,9 +364,6 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
         bot = db.query(Bot).filter(Bot.id == bot_id).first()
 
         current_status = lead.status
-        if current_status == "CLOSING":
-            new_status = "CLOSING"
-
         prev_score = lead.lead_score
 
         # =====================
@@ -311,11 +374,41 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
         intent = detect_intent(message)
 
         is_closing = detect_closing(message)
+        is_payment = detect_payment_confirmation(message)
 
+        # detect keyword status
         detected = detect_status(message, current_status)
 
-        if STATUS_ORDER.get(detected, 0) >= STATUS_ORDER.get(current_status, 0):
-            new_status = detected
+        # status untuk scoring
+        status_for_scoring = detected
+
+        if is_closing:
+            status_for_scoring = "CLOSING"
+
+        elif detected == current_status:
+            status_for_scoring = current_status
+
+        # calculate score
+        new_score = calculate_score(
+            message,
+            status_for_scoring,
+            prev_score,
+            lead.last_chat
+        )
+
+        # hasil stage dari score
+        calculated_stage = determine_stage(new_score)
+
+        # jangan gampang downgrade stage
+        if is_payment:
+            new_status = "CLOSING"
+
+        elif is_closing:
+            new_status = "CLOSING"
+
+        elif STATUS_ORDER.get(calculated_stage, 0) > STATUS_ORDER.get(current_status, 0):
+            new_status = calculated_stage
+
         else:
             new_status = current_status
 
@@ -334,30 +427,67 @@ def run_ai(user_id: str, message: str, owner_id: int, bot_id: int, system_prompt
         else:
             missing_fields = get_required_fields(new_status, intent, lead)
         
-        if detect_payment_confirmation(message):
-            lead.payment_status = "WAITING_CONFIRMATION"
+        if is_payment:
+            if hasattr(lead, "payment_status"):
+                lead.payment_status = "WAITING_CONFIRMATION"
+            
+            new_status = "CLOSING"
+            new_score = max(new_score, 90)
+            missing_fields = []
 
         # =====================
         # PAYMENT INFO
         # =====================
-        payment_info = f"""
-        METODE PEMBAYARAN:
+        payment_lines = []
 
-        🏦 Transfer Bank:
-        {getattr(bot, "bank_name", "-")} - {getattr(bot, "rekening", "-")}
+        if getattr(bot, "payment_transfer_enabled", False):
 
-        📱 QRIS:
-        {getattr(bot, "qris_url", "-")}
-        """
+            bank_name = getattr(bot, "bank_name", "")
+            rekening = getattr(bot, "rekening", "")
 
-        if not getattr(bot, "rekening", None):
+            if bank_name and rekening:
+                payment_lines.append(
+                    f"🏦 Transfer Bank:\n{bank_name} - {rekening}"
+                )
+
+        if getattr(bot, "payment_qris_enabled", False):
+
+            qris_url = getattr(bot, "qris_url", "")
+
+            if qris_url:
+                payment_lines.append(
+                    f"📱 QRIS:\n{qris_url}"
+                )
+
+        if getattr(bot, "payment_notes", None):
+            payment_lines.append(bot.payment_notes)
+
+        if getattr(bot, "payment_enabled", True) and payment_lines:
+
+            payment_info = "\n\n".join(payment_lines)
+
+        else:
+
             payment_info = """
             Pembayaran akan dikirim admin secara manual.
             """
 
-        invoice_id = f"INV-{lead.id}-{int(datetime.utcnow().timestamp())}"
+        if not getattr(lead, "invoice_id", None):
+            lead.invoice_id = f"INV-{lead.id}-{int(datetime.utcnow().timestamp())}"
 
-        
+        invoice_id = lead.invoice_id  
+
+        # =====================
+        # PAYMENT SECTION
+        # =====================
+        payment_section = ""
+
+        if is_closing or is_payment:
+
+            payment_section = f"""
+        PAYMENT INFO SYSTEM:
+        {payment_info}
+        """
         
         # =====================
         # HISTORY
@@ -378,19 +508,32 @@ LONG TERM MEMORY:
         # =====================
         # KB
         # =====================
-        knowledge_items = db.query(BotKnowledge).filter(BotKnowledge.bot_id == bot_id).all()
-        faq_items = db.query(BotFAQ).filter(BotFAQ.bot_id == bot_id).all()
+        knowledge_items = db.query(BotKnowledge).filter(
+            BotKnowledge.bot_id == bot_id
+        ).limit(10).all()
 
-        knowledge_text = "\n".join([f"- {i.content}" for i in knowledge_items])
-        faq_text = "\n".join([f"Q:{f.question} A:{f.answer}" for f in faq_items])
+        knowledge_items = filter_relevant_knowledge(message, knowledge_items)
+
+        faq_items = db.query(BotFAQ).filter(
+            BotFAQ.bot_id == bot_id
+        ).limit(10).all()
+
+        faq_items = filter_relevant_faqs(message, faq_items)
+
+        knowledge_text = "\n".join(
+            [f"- {i.content[:300]}" for i in knowledge_items]
+        )
+
+        faq_text = "\n".join(
+            [f"Q:{f.question[:120]} A:{f.answer[:200]}" for f in faq_items]
+)
 
         # =====================
         # CLOSING MODE
         # =====================
-
         closing_prompt = ""
 
-        if is_closing:
+        if is_closing or is_payment:
 
             new_status = "CLOSING"
 
@@ -404,21 +547,14 @@ LONG TERM MEMORY:
 
         {payment_info}
 
-        Instruksi:
-        - Jangan lagi tanya data panjang
-        - Fokus bantu closing
-        - Jelaskan cara pembayaran dengan jelas
-        - Jangan buat nomor rekening baru
-        - Jangan improvisasi
-        - Arahkan user untuk transfer / scan QRIS
-        - Jika user siap bayar → arahkan langsung transfer
-        - DILARANG membalas selain JSON
-        - Jangan gunakan markdown
-        - Jangan gunakan ```json
-        - Output wajib valid JSON
+        CLOSING MODE:
+        - Fokus closing & pembayaran
+        - Jangan tanya data panjang
+        - Jangan buat rekening/QRIS sendiri
+        - Arahkan user transfer / scan QRIS
+        - Output wajib JSON valid tanpa markdown
         """
             
-        new_score = calculate_score(message, new_status, prev_score, lead.last_chat)
 
         # =====================
         # SYSTEM PROMPT (FIX: ADD FOCUS)
@@ -443,42 +579,33 @@ FAQ:
 Invoice ID:
 {invoice_id}
 
+PAYMENT INFO SYSTEM:
+{payment_section}
+
 =====================
 RULES 
 ===================== 
-- Gunakan knowledge base 
-- Jangan mengarang 
-- Jika data tidak ada, bilang akan dicek admin 
-- Jangan membuat harga sendiri 
-- Jangan membuat jadwal sendiri 
-- Jangan mengarang promo 
-- Jawab berdasarkan knowledge base
-- DILARANG membuat rekening sendiri
-- DILARANG membuat QRIS sendiri
-- Gunakan EXACT payment info dari sistem
-- Jika payment info kosong → bilang admin akan mengirim pembayaran
+RULES:
+- Gunakan knowledge base, jangan mengarang
+- Jika informasi tidak ada di KNOWLEDGE atau FAQ → jawab admin akan membantu
+- Gunakan PAYMENT INFO SYSTEM untuk pembayaran
+- Jika payment kosong → admin kirim manual
+- Jangan buat harga, jadwal, rekening, atau QRIS sendiri
+- Balasan singkat natural (2-4 kalimat)
+- Fokus closing jika user siap bayar
+- Jika CLOSING_MODE aktif → jangan tanya data lagi, langsung arahkan pembayaran
+- Output wajib JSON valid
 
-Jika CLOSING_MODE = TRUE:
-- Jangan lagi tanya data
-- Fokus ke:
-  1. konfirmasi minat
-  2. jelaskan harga singkat
-  3. tampilkan metode pembayaran
-  4. arahkan ke pembayaran langsung
-
-Gaya bicara harus seperti sales closing, bukan edukasi.
-
-WAJIB BALAS FORMAT JSON:
-
-{
+FORMAT:
+{{
   "reply": "...",
-  "lead": {
-     "nama_orangtua": "",
-     "nama_anak": "",
-     "umur_anak": "",
-     "whatsapp": ""
-  }
-}
+  "lead": {{
+    "nama_orangtua": "",
+    "nama_anak": "",
+    "umur_anak": "",
+    "whatsapp": ""
+  }}
+}}
 
 {closing_prompt}
 """
@@ -490,14 +617,20 @@ WAJIB BALAS FORMAT JSON:
         response = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[{"role": "system", "content": system_context}, *history],
-            temperature=0.7,
-            max_tokens=300
+            temperature=0.4,
+            max_tokens=300,
+            response_format={"type": "json_object"}
         )
 
         ai_text = response.choices[0].message.content
         data = safe_parse(ai_text)
 
-        reply = format_reply(data.get("reply", ""))
+        reply = format_reply(
+            str(data.get("reply", "")).strip()
+        )
+
+        if len(reply) < 2:
+            reply = "Baik kak, admin akan membantu ya 🙏"
 
         ai_lead = data.get("lead", {})
 
@@ -510,19 +643,23 @@ WAJIB BALAS FORMAT JSON:
         final_lead = {
             "nama_orangtua":
                 lead_data.get("nama_orangtua")
-                or ai_lead.get("nama_orangtua"),
+                or ai_lead.get("nama_orangtua")
+                or None,
 
             "nama_anak":
                 lead_data.get("nama_anak")
-                or ai_lead.get("nama_anak"),
+                or ai_lead.get("nama_anak")
+                or None,
 
             "umur_anak":
                 lead_data.get("umur_anak")
-                or ai_lead.get("umur_anak"),
+                or ai_lead.get("umur_anak")
+                or None,
 
             "whatsapp":
                 lead_data.get("whatsapp")
-                or ai_lead.get("whatsapp"),
+                or ai_lead.get("whatsapp")
+                or None,
         }
 
         for k, v in final_lead.items():
@@ -534,6 +671,8 @@ WAJIB BALAS FORMAT JSON:
         lead.last_chat = datetime.utcnow()
 
         # SUMMARY MEMORY (hemat token)
+        lead.message_count = (lead.message_count or 0) + 1
+
         if lead.message_count > 0 and lead.message_count % 6 == 0:
 
             summary = client.chat.completions.create(
@@ -561,16 +700,20 @@ WAJIB BALAS FORMAT JSON:
 
             lead.last_summary = summary.choices[0].message.content
 
-        db.add(Conversation(
-            bot_id=bot_id,
-            lead_id=lead.id,
-            message=message,
-            response=reply,
-            raw_response=ai_text,
-            created_at=datetime.utcnow()
-        ))
+        clean_reply = reply.strip()
 
-        lead.message_count = (lead.message_count or 0) + 1
+        if clean_reply and clean_reply != "Error 🙏":
+
+            db.add(Conversation(
+                bot_id=bot_id,
+                lead_id=lead.id,
+                message=message,
+                response=reply,
+                raw_response=ai_text,
+                created_at=datetime.utcnow()
+            ))
+
+        
 
         db.commit()
 
