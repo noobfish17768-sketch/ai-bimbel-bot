@@ -6,15 +6,15 @@ function closeModal() {
     document.getElementById("modal").classList.add("hidden");
 }
 
-function switchBot(botId) {
-    window.location.href = `/dashboard?bot_id=${botId}`;
-}
-
 async function toggleBot(botId, currentStatus) {
+
+    // paksa boolean
+    currentStatus = currentStatus === true || currentStatus === "true";
 
     const newStatus = !currentStatus;
 
     try {
+
         const res = await fetch("/api/bot/toggle", {
             method: "POST",
             headers: {
@@ -22,11 +22,13 @@ async function toggleBot(botId, currentStatus) {
             },
             body: JSON.stringify({
                 bot_id: botId,
-                status: newStatus
+                is_active: newStatus
             })
         });
 
         const data = await res.json();
+
+        console.log("toggle:", data);
 
         if (data.success) {
             location.reload();
@@ -53,6 +55,7 @@ async function createBot() {
     }
 
     try {
+
         const res = await fetch("/api/bot/create", {
             method: "POST",
             headers: {
@@ -82,13 +85,11 @@ async function createBot() {
 }
 
 function goToInbox(leadId) {
+
     const urlParams = new URLSearchParams(window.location.search);
+
     const botId = urlParams.get("bot_id");
 
-    window.location.href = `/inbox?bot_id=${botId}&lead_id=${leadId}`;
-}
-
-function switchBot(botId) {
-    if (!botId) return; // ✅ guard
-    window.location.href = `/dashboard?bot_id=${botId}`;
+    window.location.href =
+        `/inbox?bot_id=${botId}&lead_id=${leadId}`;
 }

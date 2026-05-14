@@ -23,7 +23,7 @@ class CreateBotRequest(BaseModel):
 
 class ToggleRequest(BaseModel):
     bot_id: int
-    status: bool
+    is_active: bool
 
 
 class UpdateBotRequest(BaseModel):
@@ -133,39 +133,53 @@ def toggle_bot(
     db=Depends(get_db),
     current_user: User = Depends(get_current_user_db)
 ):
+
     bot = db.query(Bot).filter(
         Bot.id == data.bot_id,
-        (Bot.owner_id == current_user.id) | (Bot.user_id == current_user.id)  # ✅ FIX
+        (
+            (Bot.owner_id == current_user.id) |
+            (Bot.user_id == current_user.id)
+        )
     ).first()
 
     if not bot:
         raise HTTPException(status_code=404, detail="Bot not found")
 
     try:
-        bot.is_active = data.status
+
+        bot.is_active = data.is_active
+
         db.commit()
 
-        print(f"🔁 BOT TOGGLE: {bot.id} → {data.status}")
+        print(f"🔁 BOT TOGGLE: {bot.id} → {data.is_active}")
 
     except Exception as e:
+
         db.rollback()
+
         print("❌ DB ERROR:", e)
-        raise HTTPException(status_code=500, detail="Update failed")
+
+        raise HTTPException(
+            status_code=500,
+            detail="Update failed"
+        )
 
     if redis_client:
         try:
+
             redis_client.set(
                 f"bot:{bot.id}",
-                str(data.status),
+                str(data.is_active),
                 ex=3600
             )
+
         except Exception as e:
             print("⚠️ Redis error:", e)
 
     return {
         "success": True,
         "bot_id": bot.id,
-        "is_active": data.status
+        "is_active": bot.is_active
     }
 
 
